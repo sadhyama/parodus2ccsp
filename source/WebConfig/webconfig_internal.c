@@ -49,6 +49,7 @@ static char deviceMAC[32]={'\0'};
 static char g_systemReadyTime[64]={'\0'};
 char *ETAG="NONE";
 char serialNum[64]={'\0'};
+int initURL==0;
 char webpa_auth_token[4096]={'\0'};
 pthread_mutex_t device_mac_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t periodicsync_mutex=PTHREAD_MUTEX_INITIALIZER;
@@ -70,6 +71,7 @@ int handleHttpResponse(long response_code, char *webConfigData );
 static char* generate_trans_uuid();
 static void getDeviceMac();
 static void macToLowerCase(char macValue[]);
+static void loadInitURLFromFile(char **url);
 /*----------------------------------------------------------------------------*/
 /*                             External Functions                             */
 /*----------------------------------------------------------------------------*/
@@ -269,6 +271,7 @@ int requestWebConfigData(char **configData, int r_count, int index, int status, 
 	int content_res=0;
 	struct token_data data;
 	data.size = 0;
+	char * configURL = NULL;
 
 	curl = curl_easy_init();
 	if(curl)
@@ -282,16 +285,37 @@ int requestWebConfigData(char **configData, int r_count, int index, int status, 
 		}
 		data.data[0] = '\0';
 		createCurlheader(list, &headers_list, status);
-		URL_param = (char *) malloc(sizeof(char)*MAX_BUF_SIZE);
-		if(URL_param !=NULL)
+
+		if(initURL==0)
 		{
-			//snprintf(URL_param, MAX_BUF_SIZE, "Device.X_RDK_WebConfig.ConfigFile.[%d].URL", i);//testing purpose.
-			snprintf(URL_param, MAX_BUF_SIZE, "http://96.116.56.207:8080/api/v4/gateway-cpe/%s/config/voice", deviceMAC);
-			webConfigURL = strdup(URL_param); //testing. remove this.
-			WalInfo("webConfigURL is %s\n", webConfigURL);
-			//webConfigURL = getParameterValue(URL_param, &paramType);
-			curl_easy_setopt(curl, CURLOPT_URL, webConfigURL );
+			WalInfo("loadInitURLFromFile first case\n);
+			loadInitURLFromFile(&configURL);
+			if(configURL !=NULL)
+			{
+				WalInfo("configURL fetched from device.properties file is %s\n", configURL);
+				//index =1;
+				//ret = setInitConfigURL(configURL, 1); //TODO: local api implementation
+				if(ret == 0)
+				{
+					WalInfo("setConfigURL done\n");
+				}
+				initURL=1;
+			}
 		}
+		else
+		{
+			WalInfo("getConfigURL second case\n"); //TODO
+			URL_param = (char *) malloc(sizeof(char)*MAX_BUF_SIZE);
+			if(URL_param !=NULL)
+			{
+				//snprintf(URL_param, MAX_BUF_SIZE, "Device.X_RDK_WebConfig.ConfigFile.[%d].URL", i);//testing purpose.
+				snprintf(URL_param, MAX_BUF_SIZE, "http://96.116.56.207:8080/api/v4/gateway-cpe/%s/config/voice", deviceMAC);
+				webConfigURL = strdup(URL_param); //testing. remove this.
+				WalInfo("webConfigURL is %s\n", webConfigURL);
+				curl_easy_setopt(curl, CURLOPT_URL, webConfigURL );
+			}
+		}
+
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, CURL_TIMEOUT_SEC);
 		get_webCfg_interface(&interface);
 		if(interface !=NULL && strlen(interface) >0)
@@ -377,6 +401,43 @@ int requestWebConfigData(char **configData, int r_count, int index, int status, 
 	}
 	return rv;
 }
+
+//loadInitURLFromFile
+static void loadInitURLFromFile(char **url)
+{
+	FILE *fp = fopen(DEVICE_PROPS_FILE, "r");
+
+	if (NULL != fp)
+	{
+		char str[255] = {'\0'};
+		while(fscanf(fp,"%s", str) != EOF)
+		{
+		    char *value = NULL;
+
+		    if(NULL != (value = strstr(str, "WEBCONFIG_INIT_URL=")))
+		    {
+			value = value + strlen("WEBCONFIG_INIT_URL=");
+			*url = strdup(value);
+		    }
+
+		}
+		fclose(fp);
+	}
+	else
+	{
+		WalError("Failed to open device.properties file:%s\n", DEVICE_PROPS_FILE);
+	}
+
+	if (NULL == *url)
+	{
+		WalError("WebConfig url is not present in device.properties\n");
+	}
+	else
+	{
+		WalInfo("url fetched is %s\n", *url);
+	}
+}
+
 
 /* @brief callback function for writing libcurl received data
  * @param[in] buffer curl delivered data which need to be saved.
