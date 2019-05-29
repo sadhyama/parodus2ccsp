@@ -710,4 +710,27 @@ ConfigFile_Rollback
     WebConfigLog(" %s : EXIT \n", __FUNCTION__ );
 }
 
-
+int initConfigFileWithURL(char *Url, ULONG InstanceNumber)
+{
+    WalInfo("-------- %s ----- Enter ------\n",__FUNCTION__);
+	if(isValidUrl(Url) == TRUE)
+	{
+        PCOSA_DATAMODEL_WEBCONFIG             pWebConfig              = (PCOSA_DATAMODEL_WEBCONFIG)g_pCosaBEManager->hWebConfig;
+        PCOSA_DML_WEBCONFIG_CONFIGFILE_ENTRY pConfigFileEntry = NULL;
+        pConfigFileEntry = (PCOSA_DML_WEBCONFIG_CONFIGFILE_ENTRY)AnscAllocateMemory(sizeof(COSA_DML_WEBCONFIG_CONFIGFILE_ENTRY));
+        memset(pConfigFileEntry, 0, sizeof(COSA_DML_WEBCONFIG_CONFIGFILE_ENTRY));
+	    pConfigFileEntry->InstanceNumber = InstanceNumber;
+	    AnscCopyString( pConfigFileEntry->URL, Url );
+        FillEntryInList(pWebConfig, pConfigFileEntry);
+	    int configCount = AnscSListQueryDepth( &pWebConfig->ConfigFileList );
+	    WalInfo("configCount: %d\n",configCount);
+	    updateConfigFileNumberOfEntries(configCount);
+	    updateConfigFileIndexsList(InstanceNumber);
+	    updateConfigFileNextInstanceNumber(InstanceNumber+1);
+	    CosaDmlSetConfigFileEntry(pConfigFileEntry);
+	    WalInfo("-------- %s ----- Exit ------\n",__FUNCTION__);
+	    return 0;
+	}
+	WalInfo("-------- %s ----- Exit ------\n",__FUNCTION__);
+	return 1;
+}
