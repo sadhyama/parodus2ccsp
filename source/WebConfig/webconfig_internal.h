@@ -39,5 +39,7 @@ extern bool g_shutdown;
 /*----------------------------------------------------------------------------*/
 pthread_cond_t *get_global_periodicsync_condition(void);
 pthread_mutex_t *get_global_periodicsync_mutex(void);
+int get_global_forced_sync();
+void set_global_forced_sync(int sync);
 
 #endif /* _WEBCONFIG_INTERNAL_H_ */

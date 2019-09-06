@@ -62,6 +62,7 @@ static char g_FirmwareVersion[64]={'\0'};
 static char g_bootTime[64]={'\0'};
 char webpa_auth_token[4096]={'\0'};
 static char g_ETAG[64]={'\0'};
+static int forced_sync = 0;
 pthread_mutex_t periodicsync_mutex=PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t periodicsync_condition=PTHREAD_COND_INITIALIZER;
 pthread_mutex_t notify_mut=PTHREAD_MUTEX_INITIALIZER;
@@ -107,6 +108,17 @@ pthread_mutex_t *get_global_periodicsync_mutex(void)
     return &periodicsync_mutex;
 }
 
+int get_global_forced_sync()
+{
+    return forced_sync;
+}
+
+void set_global_forced_sync(int sync)
+{
+    forced_sync = sync;
+}
+
+
 void initWebConfigTask(int status)
 {
 	int err = 0;
@@ -135,7 +147,7 @@ static void *WebConfigTask(void *status)
         time_t t;
 	int count=0;
 	int wait_flag=0;
-	int forced_sync=0, syncIndex = 0;
+	int syncIndex = 0;
         int value =Get_PeriodicSyncCheckInterval();
 
 	//start webconfig notification thread.
@@ -143,13 +155,13 @@ static void *WebConfigTask(void *status)
 
 	while(1)
 	{
-		if(forced_sync)
+		if(get_global_forced_sync())
 		{
 			//trigger sync only for particular index
 			WebConfigLog("Trigger Forced sync for index %d\n", syncIndex);
 			processWebconfigSync(syncIndex, (int)status);
 			WebConfigLog("reset forced_sync and syncIndex after sync\n");
-			forced_sync = 0;
+			set_global_forced_sync(0);
 			syncIndex = 0;
 			WebConfigLog("reset ForceSyncCheck after sync\n");
 			setForceSyncCheck(index, false, "", 0);
@@ -218,14 +230,15 @@ static void *WebConfigTask(void *status)
 				if(ForceSyncEnable)
 				{
 					wait_flag=0;
-					forced_sync = 1;
+					WebConfigLog("set_global_forced_sync to 1\n");
+					set_global_forced_sync(1);
 					syncIndex = index;
 					WebConfigLog("Received signal interrupt to getForceSyncCheck at %s\n",ctime(&t));
 					break;
 				}
 			}
-			WebConfigLog("forced_sync is %d\n", forced_sync);
-			if(!forced_sync)
+			WebConfigLog("forced_sync is %d\n", get_global_forced_sync());
+			if(!get_global_forced_sync())
 			{
 				wait_flag=1;
 				value=Get_PeriodicSyncCheckInterval();
@@ -284,6 +297,9 @@ void processWebconfigSync(int index, int status)
 			retry_count=0;
 			break;
 		}
+		WebConfigLog("sleep of 15s before sync\n");
+		sleep(15);
+		WebConfigLog("sleep of 15s done. proceeding to sync\n");
 		configRet = requestWebConfigData(&webConfigData, r_count, index, status, &res_code, &transaction_uuid);
 		if(configRet == 0)
 		{

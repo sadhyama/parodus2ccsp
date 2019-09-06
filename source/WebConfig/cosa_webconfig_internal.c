@@ -569,7 +569,9 @@ BOOL setForceSyncCheckWithWebConfigCtx(ANSC_HANDLE hInsContext, BOOL bValue, cha
 		pConfigFileEntry->ForceSyncCheck = bValue;
 		if(bValue)
 		{
-			if(pConfigFileEntry->ForceSyncTransID !=NULL && (strlen(pConfigFileEntry->ForceSyncTransID)>0))
+			//if(pConfigFileEntry->ForceSyncTransID !=NULL && (strlen(pConfigFileEntry->ForceSyncTransID)>0))
+			WebConfigLog("get_global_forced_sync() is %d\n", get_global_forced_sync());
+			if(get_global_forced_sync())
 			{
 				WebConfigLog("Force sync is already in progress, Ignoring this request.\n");
 				*pStatus = 1;

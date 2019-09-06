@@ -504,6 +504,7 @@ ConfigFile_SetParamBoolValue
         BOOL                        bValue
     )
 {
+	int status = 0;
 	WebcfgDebug("------- %s ----- ENTER ----\n",__FUNCTION__);
 	RFC_ENABLE=Get_RfcEnable();
 	if(!RFC_ENABLE)
@@ -514,12 +515,16 @@ ConfigFile_SetParamBoolValue
 	/* check the parameter name and set the corresponding value */
 	if(AnscEqualString(ParamName, "ForceSyncCheck", TRUE)) 
 	{
-		if(setForceSyncCheckWithWebConfigCtx(hInsContext, bValue, "", 0))
+		if(setForceSyncCheckWithWebConfigCtx(hInsContext, bValue, "", status))
 		{
 			return TRUE;
 		}
+		else
+		{
+			WebConfigLog("Force Sync Returning error. status is %d\n", status);
+		}
 	}
-	WebcfgDebug("------- %s ----- EXIT ----\n",__FUNCTION__);
+	WebConfigLog("------- %s ----- EXIT ----\n",__FUNCTION__);
 	return FALSE;
 }
 
