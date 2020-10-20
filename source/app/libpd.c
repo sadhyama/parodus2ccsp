@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <math.h>
 #include <pthread.h>
 #include <cJSON.h>
 #include <uuid/uuid.h>
@@ -39,7 +40,7 @@ static void connect_parodus()
 {
         int backoffRetryTime = 0;
         int backoff_max_time = 5;
-        int max_retry_sleep;
+        int max_retry_sleep = 0;
         //Retry Backoff count shall start at c=2 & calculate 2^c - 1.
         int c =2;
         int retval=-1;
@@ -47,10 +48,14 @@ static void connect_parodus()
         char *parodus_url = NULL;
         char *client_url = NULL;
 
-        max_retry_sleep = (int) pow(2, backoff_max_time) -1;
+	WalInfo("connect_parodus, calculating max_retry_sleep\n");
+	WalInfo("pow(2, backoff_max_time) is %d\n", (int) pow(2, backoff_max_time));
+
+        max_retry_sleep = (int) ((pow(2, backoff_max_time)) - 1);
         WalInfo("max_retry_sleep is %d\n", max_retry_sleep );
 
 	get_parodus_url(&parodus_url, &client_url);
+	WalInfo("parodus url %s and client url %s\n",parodus_url,client_url);
 		
 	if(parodus_url != NULL && client_url != NULL)
 	{	
@@ -60,18 +65,20 @@ static void connect_parodus()
 					.client_url = client_url
 				   };
 	            
-	    	WalPrint("libparodus_init with parodus url %s and client url %s\n",cfg1.parodus_url,cfg1.client_url);
+		WalInfo("libparodus_init with parodus url %s and client url %s\n",cfg1.parodus_url,cfg1.client_url);
 
 	    	while(1)
 	    	{
 	            if(backoffRetryTime < max_retry_sleep)
 	            {
-	                  backoffRetryTime = (int) pow(2, c) -1;
+			  WalInfo("calculating backoffRetryTime\n");
+			  WalInfo("pow(2, c) is %d\n", (int) pow(2, c));
+	                  backoffRetryTime = (int) ((pow(2, c)) - 1);
 	            }
 
-	            WalPrint("New backoffRetryTime value calculated as %d seconds\n", backoffRetryTime);
+	            WalInfo("New backoffRetryTime value calculated as %d seconds\n", backoffRetryTime);
 	            int ret =libparodus_init (&current_instance, &cfg1);
-	            WalPrint("ret is %d\n",ret);
+	            WalInfo("ret is %d\n",ret);
 	            if(ret ==0)
 	            {
 	                    WalInfo("Init for parodus Success..!!\n");
@@ -104,12 +111,12 @@ static void connect_parodus()
 	                    {
 	                    	c = 2;
 	                    	backoffRetryTime = 0;
-	                    	WalPrint("backoffRetryTime reached max value, reseting to initial value\n");
+				WalInfo("backoffRetryTime reached max value, reseting to initial value\n");
 	                    	OnboardLog("Init for parodus failed: '%s'\n",libparodus_strerror(ret));
 	                    }
 	            }
 	            retval = libparodus_shutdown(&current_instance);
-	            WalPrint("libparodus_shutdown retval %d\n", retval);
+	            WalInfo("libparodus_shutdown retval %d\n", retval);
 	    	}
 	}
 }
