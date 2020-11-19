@@ -163,6 +163,7 @@ const char * notifyparameters[]={
 "Device.X_COMCAST-COM_GRE.Tunnel.1.Interface.1.LocalInterfaces",
 "Device.X_COMCAST-COM_GRE.Tunnel.1.Interface.2.VLANID",
 "Device.X_COMCAST-COM_GRE.Tunnel.1.Interface.2.LocalInterfaces",
+"Device.WiFi.SSID.10105.Enable",
 /* Always keep AdvancedSecurity parameters as the last parameters in notify list as these have to be removed if cujo/fp is not enabled. */
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.SafeBrowsing.Enable",
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.Softflowd.Enable"
