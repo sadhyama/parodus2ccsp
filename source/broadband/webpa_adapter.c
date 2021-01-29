@@ -607,10 +607,10 @@ WDMP_STATUS validate_parameter(param_t *param, int paramCount, REQ_TYPE type)
                         return WDMP_ERR_INVALID_PARAM;
                 }
 
-                if(strlen(param[i].value) >= MAX_PARAMETERVALUE_LEN)
+                /*if(strlen(param[i].value) >= MAX_PARAMETERVALUE_LEN)
                 {
                         return WDMP_ERR_INVALID_PARAM;
-                }
+                }*/
 
                 // If input parameter is wildcard ending with "." then send error as wildcard is not supported for TEST_AND_SET
                 if(param[i].name[(strlen(param[i].name)-1)] == '.')
