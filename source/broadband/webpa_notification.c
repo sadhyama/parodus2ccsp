@@ -557,7 +557,7 @@ static void getNotifyParamList(const char ***paramList, int *size)
     }
     WAL_FREE(fpEnable);
 
-    if(removeFlag == 1)
+    /*if(removeFlag == 1)
     {
         WalInfo("Removing %s from notification list\n", notifyparameters[0]);
         for(i = 1; i<count; i++)
@@ -565,7 +565,7 @@ static void getNotifyParamList(const char ***paramList, int *size)
             notifyparameters[i-1] = notifyparameters[i];
         }
         count = count-1;
-    }
+    }*/
 
     // Remove Advanced Security params from NotifyList when cujo/fp is not enabled.
     if(fpRemoveFlag == 1)
@@ -575,7 +575,7 @@ static void getNotifyParamList(const char ***paramList, int *size)
     }
 #endif
     *size = count;
-	WalPrint("Notify param list size :%d\n", *size);
+	WalInfo("Notify param list size :%d\n", *size);
 	*paramList = notifyparameters;
 }
 
