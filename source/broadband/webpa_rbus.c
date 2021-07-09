@@ -122,10 +122,6 @@ rbusError_t webpaDataSetHandler(rbusHandle_t handle, rbusProperty_t prop, rbusSe
 
     if(strncmp(paramName, WEBPA_CMC_PARAM, maxParamLen) == 0) {
         WalInfo("Inside CMC datamodel handler \n");
-	if(dmCMCProcessingCallBack == NULL) {
-            WalError("CMC Element does not exist\n");
-            return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
-        }
         if(type_t == RBUS_STRING) {
             char* data = rbusValue_ToString(paramValue_t, NULL, 0);
             if(data) {
@@ -151,10 +147,6 @@ rbusError_t webpaDataSetHandler(rbusHandle_t handle, rbusProperty_t prop, rbusSe
 
     }else if(strncmp(paramName, WEBPA_CID_PARAM, maxParamLen) == 0) {
         WalInfo("Inside datamodel handler for CID \n");
-        if(dmCIDProcessingCallBack == NULL) {
-            WalError("CID Element does not exist\n");
-            return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
-        }
 
         if(type_t == RBUS_STRING) {
             char* data = rbusValue_ToString(paramValue_t, NULL, 0);
@@ -180,10 +172,6 @@ rbusError_t webpaDataSetHandler(rbusHandle_t handle, rbusProperty_t prop, rbusSe
         }
     }else if(strncmp(paramName, WEBPA_SYNCVERSION_PARAM, maxParamLen) == 0) {
         WalInfo("Inside SYNC VERSION datamodel handler \n");
-	if(dmSyncVersionProcessingCallBack == NULL) {
-            WalError("Sync Version Element does not exist\n");
-            return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
-        }
         if(type_t == RBUS_STRING) {
             char* data = rbusValue_ToString(paramValue_t, NULL, 0);
             if(data) {
