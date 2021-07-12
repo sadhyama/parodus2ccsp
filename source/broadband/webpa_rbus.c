@@ -35,9 +35,6 @@
 #define NUM_WEBPA_ELEMENTS 3
 
 static rbusHandle_t rbus_handle;
-static dataModelCMCCallBack dmCMCProcessingCallBack;
-static dataModelCIDCallBack dmCIDProcessingCallBack = NULL;
-static dataModelSyncVersionCallBack dmSyncVersionProcessingCallBack = NULL;
 
 static char* CMCVal = NULL ;
 static char* CIDVal = NULL ;
@@ -88,13 +85,6 @@ static void webpaRbus_Uninit( ) {
     rbus_close(rbus_handle);
 }
 
-void rbusRegisterDataModel()
-{
-	WalInfo("B4 regWebpaDataModel\n");
-	regWebpaDataModel(NULL, NULL, NULL);
-	WalInfo("After regWebpaDataModel\n");
-}
-
 /**
  * Data set handler for Webpa parameters
  */
@@ -126,12 +116,6 @@ rbusError_t webpaDataSetHandler(rbusHandle_t handle, rbusProperty_t prop, rbusSe
             char* data = rbusValue_ToString(paramValue_t, NULL, 0);
             if(data) {
                 WalInfo("Call datamodel function  with data %s \n", data);
-                if(WDMP_SUCCESS != dmCMCProcessingCallBack(data))
-                {
-                    free(data);
-		    WalError("Invalid input for CMC\n");
-                    return RBUS_ERROR_INVALID_INPUT;
-                }
 
                 if (CMCVal){
                     free(CMCVal);
@@ -152,12 +136,6 @@ rbusError_t webpaDataSetHandler(rbusHandle_t handle, rbusProperty_t prop, rbusSe
             char* data = rbusValue_ToString(paramValue_t, NULL, 0);
             if(data) {
                 WalInfo("Call datamodel function  with data %s \n", data);
-                if(WDMP_SUCCESS != dmCIDProcessingCallBack(data))
-                {
-                    free(data);
-		    WalError("Invalid input for CID\n");
-                    return RBUS_ERROR_INVALID_INPUT;
-                }
 
                 if(CIDVal) {
                     free(CIDVal);
@@ -176,12 +154,6 @@ rbusError_t webpaDataSetHandler(rbusHandle_t handle, rbusProperty_t prop, rbusSe
             char* data = rbusValue_ToString(paramValue_t, NULL, 0);
             if(data) {
                 WalInfo("Call datamodel function  with data %s \n", data);
-                if(WDMP_SUCCESS != dmSyncVersionProcessingCallBack(data))
-                {
-                    free(data);
-		    WalError("Invalid input for Sync Version\n");
-                    return RBUS_ERROR_INVALID_INPUT;
-                }
 
                 if (syncVersionVal){
                     free(syncVersionVal);
@@ -266,7 +238,7 @@ rbusError_t webpaDataGetHandler(rbusHandle_t handle, rbusProperty_t property, rb
  * Data element over bus will be Device.DeviceInfo.Webpa.X_COMCAST-COM_CMC,
  *    Device.DeviceInfo.Webpa.X_COMCAST-COM_CID
  */
-WDMP_STATUS regWebpaDataModel(dataModelCMCCallBack dmCMCCallBackHandler, dataModelCIDCallBack dmCIDCallBackHandler, dataModelSyncVersionCallBack dmSyncVersionCallBackHandler) 
+WDMP_STATUS regWebpaDataModel()
 {
 	char deCMC[125] = { '\0' };
 	char deCID[125] = { '\0' };
@@ -302,14 +274,6 @@ WDMP_STATUS regWebpaDataModel(dataModelCMCCallBack dmCMCCallBackHandler, dataMod
 		status = WDMP_FAILURE;
 	}
 
-	if (!dmCMCProcessingCallBack)
-		dmCMCProcessingCallBack = dmCMCCallBackHandler ;
-
-	if(!dmCIDProcessingCallBack)
-		dmCIDProcessingCallBack = dmCIDCallBackHandler;
-
-	if(!dmSyncVersionProcessingCallBack)
-		dmSyncVersionProcessingCallBack = dmSyncVersionCallBackHandler;
 	WalInfo("rbus reg status returned is %d\n", status);
 	return status;
 }

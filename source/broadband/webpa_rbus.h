@@ -34,8 +34,4 @@
 #define WEBPA_CID_PARAM "Device.DeviceInfo.Webpa.X_COMCAST-COM_CID"
 #define WEBPA_SYNCVERSION_PARAM "Device.DeviceInfo.Webpa.X_COMCAST-COM_SyncProtocolVersion"
 
-bool isRbusEnabled();
-
-WDMP_STATUS webpaRbusInit(const char *pComponentName);
-
 #endif

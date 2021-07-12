@@ -62,7 +62,7 @@ bool isRbusEnabled();
 
 WDMP_STATUS webpaRbusInit(const char *pComponentName);
 
-void rbusRegisterDataModel();
+WDMP_STATUS regWebpaDataModel();
 /**
  * @brief waitForOperationalReadyCondition wait till all dependent components
  * required for being operational are initialized

@@ -61,7 +61,7 @@ int main()
 		WalInfo("webpaRbusInit\n");
 		webpaRbusInit(pComponentName);
 		system("touch /tmp/webpa_initialized");
-		rbusRegisterDataModel();
+		regWebpaDataModel();
 	}
 	else
 	{
