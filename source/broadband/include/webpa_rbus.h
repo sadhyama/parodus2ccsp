@@ -32,6 +32,8 @@
 #define COMPONENT_ID_NOTIFY_COMP "writeid_notify"
 #define WiFi_FactoryResetRadioAndAp	    "Device.WiFi.X_CISCO_COM_FactoryResetRadioAndAp"
 
+#define DEST_COMP_ID_PSM   "com.cisco.spvtg.ccsp.psm"
+
 // Data elements provided by webpa
 
 #define WEBPA_NOTIFY_PARAM "Device.Webpa.X_RDKCENTRAL-COM_WebPA_Notification"

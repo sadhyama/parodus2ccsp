@@ -11,7 +11,7 @@
 #include "ccsp_base_api.h"
 #include "webpa_adapter.h"
 #include "ccsp_psm_helper.h"
-
+#include "webpa_internal.h"
 /* 
  * To enable when all webpa params getting from syscfg.db file otherwise keep 
  * it disable.
