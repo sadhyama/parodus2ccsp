@@ -18,7 +18,7 @@
 
 #include <stdint.h>
 #include <wdmp-c.h>
-#include <rbus.h>
+#include <rbus/rbus.h>
 #include <rbus/rbus_object.h>
 #include <rbus/rbus_property.h>
 #include <rbus/rbus_value.h>

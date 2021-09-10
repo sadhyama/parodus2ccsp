@@ -53,7 +53,12 @@
 /*----------------------------------------------------------------------------*/
 /*                               Data Structures                              */
 /*----------------------------------------------------------------------------*/
-
+typedef struct
+{
+    char *paramName;
+    char *paramValue;
+    rbusValueType_t type;
+} rbusParamVal_t;
 /*----------------------------------------------------------------------------*/
 /*                            File Scoped Variables                           */
 /*----------------------------------------------------------------------------*/
@@ -173,7 +178,7 @@ int Get_Webconfig_URL( char *pString)
 
 int Set_Webconfig_URL( char *pString)
 {
-    int retPsmGet = 0;
+    int retPsmSet = 0;
     if(isRbusEnabled())
     {
     	retPsmSet = rbus_StoreValueIntoDB( WEBCFG_URL_PARAM, pString );
@@ -182,7 +187,7 @@ int Set_Webconfig_URL( char *pString)
     return 0;
 }
 
-char * getParameterValue()
+char * getParameterValue(char *paramName)
 {
 	if(isRbusEnabled())
 	{
