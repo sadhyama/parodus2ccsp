@@ -52,6 +52,7 @@ BOOL Get_RfcEnable()
 int setRfcEnable(BOOL bValue)
 {
 	PCOSA_DATAMODEL_WEBCONFIG            pMyObject           = (PCOSA_DATAMODEL_WEBCONFIG)g_pCosaBEManager->hWebConfig;
+#if 0
 	char buf[16] = {0};
 	int retPsmSet = CCSP_SUCCESS;
 
@@ -103,6 +104,8 @@ int setRfcEnable(BOOL bValue)
 		return 0;
         }
 #endif
+#endif
+	WalInfo("setRfcEnable returns 0\n");
 	return 0;
 }
 

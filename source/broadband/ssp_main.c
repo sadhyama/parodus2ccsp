@@ -115,10 +115,10 @@ WDMP_STATUS msgBusInit(const char *pComponentName)
 #else
     AnscCopyString(g_Subsystem, "");
 #endif
-
+    WalInfo("In msgBusInit\n");
     if ( bRunAsDaemon ) 
         daemonize();
-
+    WalInfo("After daemonize\n");
     cmd_dispatch('e');
 
     subSys = NULL;      /* use default sub-system */
@@ -127,11 +127,13 @@ WDMP_STATUS msgBusInit(const char *pComponentName)
     if (err != CCSP_SUCCESS)
     {
         fprintf(stderr, "Cdm_Init: %s\n", Cdm_StrError(err));
+	WalError("Cdm_Init: failed\n");
         exit(1);
     }
     system("touch /tmp/webpa_initialized");
 if ( bRunAsDaemon )
     {
+	WalInfo("Return failure\n");
         return WDMP_FAILURE;
     }
     else
@@ -143,15 +145,17 @@ if ( bRunAsDaemon )
             cmd_dispatch(cmdChar);
         }
     }
-
+    WalInfo("B4 Cdm_Term\n");
     err = Cdm_Term();
     if (err != CCSP_SUCCESS)
     {
     fprintf(stderr, "Cdm_Term: %s\n", Cdm_StrError(err));
+    WalInfo("Cdm_Term failed\n");
     exit(1);
     }
-
+    WalInfo("B4 ssp_cancel\n");
     ssp_cancel();
+    WalInfo("After ssp_cancel\n");
     return WDMP_SUCCESS;
 }
 

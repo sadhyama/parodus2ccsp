@@ -252,13 +252,13 @@ static void *WALInit(void *status)
 	componentStruct_t ** ppComponents = NULL;
 	cachingStatus = 0;
 
-	WalPrint("------------ WALInit ----------\n");
+	WalInfo("------------ WALInit ----------\n");
 	pthread_detach(pthread_self());
 	waitUntilSystemReady();
-	
+#if 0
 #ifdef FEATURE_SUPPORT_WEBCONFIG
 	//Function to start webConfig operation after system ready.
-	WebcfgInfo("FEATURE_SUPPORT_WEBCONFIG is enabled, device status %d\n", (int)status);
+	WalInfo("FEATURE_SUPPORT_WEBCONFIG is enabled, device status %d\n", (int)status);
 	set_global_operationalStatus(status);
 	char RfcEnable[64];
 	memset(RfcEnable, 0, sizeof(RfcEnable));
@@ -266,7 +266,7 @@ static void *WALInit(void *status)
 	char* strValue = NULL;
 	if (CCSP_SUCCESS == PSM_Get_Record_Value2(bus_handle, g_Subsystem, "eRT.com.cisco.spvtg.ccsp.webpa.WebConfigRfcEnable", NULL, &strValue))
 	{
-		WebcfgDebug("strValue %s \n", strValue);
+		WalInfo("strValue %s \n", strValue);
 		if(strValue != NULL)
 		{
 			walStrncpy(RfcEnable, strValue, sizeof(RfcEnable));
@@ -276,20 +276,23 @@ static void *WALInit(void *status)
 #endif
 	if(RfcEnable[0] != '\0' && strncmp(RfcEnable, "true", strlen("true")) == 0)
 	{
+	    WalInfo("B4 get_global_mpThreadId check in webpa\n");
 	    if(get_global_mpThreadId() == NULL) 
 	    {
-	    	WebcfgInfo("WebConfig Rfc is enabled, starting WebConfigMultipartTask\n");
-	    	initWebConfigMultipartTask((unsigned long) status);
+		WalInfo("WebConfig Rfc is enabled, starting WebConfigMultipartTask from webpa\n");
+		initWebConfigMultipartTask((unsigned long) status);
  	    }
 	    else
 	    {
-		WebcfgInfo("Webconfig is already started, so not starting after systemready\n");
+		WalInfo("Webconfig is already started, so not starting after systemready\n");
 	    }
 	}
 	else
 	{
-		WebcfgError("WebConfig Rfc Flag is not enabled\n");
+		WalError("WebConfig Rfc Flag is not enabled\n");
 	}
+	WalInfo("After webconfig start from webpa\n");
+#endif
 #endif
 #if !defined(RDKB_EMU)
 	strncpy(l_Subsystem, "eRT.",sizeof(l_Subsystem));
