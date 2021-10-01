@@ -231,6 +231,7 @@ void processRequest(char *reqPayload,char *transactionId, char **resPayload)
                                         WalPrint("Request:> param[%d].value = %s\n",i,reqObj->u.setReq->param[i].value);
                                         WalPrint("Request:> param[%d].type = %d\n",i,reqObj->u.setReq->param[i].type);
                                         setRebootReason(reqObj->u.setReq->param[i], WEBPA_SET);
+
                                 }
                                 
                                 ret = validate_parameter(reqObj->u.setReq->param, paramCount, reqObj->reqType);
@@ -239,7 +240,9 @@ void processRequest(char *reqPayload,char *transactionId, char **resPayload)
                                 {
                                         if(reqObj->reqType == SET)
                                         {
+						WalInfo("B4 setValues\n");
                                                 setValues(reqObj->u.setReq->param, paramCount, WEBPA_SET, transactionId, resObj->timeSpan, &ret, &ccspStatus);
+						WalInfo("After setValues\n");
                                         }
                                         else
                                         {

@@ -19,6 +19,7 @@
 /*                                   Macros                                   */
 /*----------------------------------------------------------------------------*/
 #define RDKB_WEBPA_FULL_COMPONENT_NAME      "eRT.com.cisco.spvtg.ccsp.webpaagent"
+#define WEBCFG_FORCE_SYNC_PARAM "Device.X_RDK_WebConfig.ForceSync"
 /*----------------------------------------------------------------------------*/
 /*                               Data Structures                              */
 /*----------------------------------------------------------------------------*/
@@ -717,7 +718,40 @@ static int setParamValues(param_t *paramVal, char *CompName, char *dbusPath, int
         }
         else
         {
+#ifdef WEBCONFIG_BIN_SUPPORT
+		WalInfo("Check Force sync param\n");
+		if(!strcmp(val[0].parameterName,WEBCFG_FORCE_SYNC_PARAM))
+		{
+			WalInfo("B4 createForceSyncJsonSchema\n");
+			WDMP_STATUS jsonstatus = WDMP_FAILURE;
+			char *jsonValue = NULL;
+			jsonstatus = createForceSyncJsonSchema(val[0].parameterValue, transactionId, &jsonValue);
+			if(jsonstatus == WDMP_SUCCESS)
+			{
+				WalInfo("stringified force sync jsonValue is %s\n", jsonValue);
+
+				if((val[0].parameterValue !=NULL) && (jsonValue !=NULL))
+				{
+					WalInfo("Free val[0].parameterValue %s and assign new value\n", val[0].parameterValue);
+					WAL_FREE(val[0].parameterValue);
+					WalInfo("Assigning to val struct\n");
+					val[0].parameterValue = strdup(jsonValue);
+					WalInfo("Assigning to val struct\n");
+				}
+				else
+				{
+					WalError("Force sync jsonValue NULL\n");
+				}
+			}
+			else
+			{
+				WalError("Failed to create force sync JSON\n");
+			}
+			WalInfo("Proceeding to ccsp set\n");
+		}
+#endif
             ret = CcspBaseIf_setParameterValues(bus_handle, CompName, dbusPath, 0, writeID, val, paramCount, TRUE, &faultParam);
+		WalInfo("After ccsp set . ret is %d\n", ret);
         }
 
         if(!strcmp(CompName,RDKB_WIFI_FULL_COMPONENT_NAME) && setType != WEBPA_ATOMIC_SET_WEBCONFIG)
@@ -949,5 +983,3 @@ static void *applyWiFiSettingsTask()
 	WalPrint("============ End =============\n");
         return NULL;
 }
-
-
