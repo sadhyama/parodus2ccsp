@@ -733,10 +733,24 @@ static int setParamValues(param_t *paramVal, char *CompName, char *dbusPath, int
 				if((val[0].parameterValue !=NULL) && (jsonValue !=NULL))
 				{
 					WalInfo("Free val[0].parameterValue %s and assign new value\n", val[0].parameterValue);
-					WAL_FREE(val[0].parameterValue);
-					WalInfo("Assigning to val struct\n");
-					val[0].parameterValue = strdup(jsonValue);
-					WalInfo("Assigning to val struct\n");
+					int paramvalsize =0, jsonsize = 0, newvalsize = 0;
+
+					paramvalsize = strlen(val[0].parameterValue);
+					jsonsize = strlen(jsonValue);
+					WalInfo("paramvalsize %d jsonsize %d\n", paramvalsize,jsonsize);
+					newvalsize = paramvalsize + (jsonsize - paramvalsize);
+					WalInfo("newvalsize is %d\n", newvalsize);
+					val[0].parameterValue = realloc(val[0].parameterValue, newvalsize + 1);
+					if(val[0].parameterValue)
+					{
+						WalInfo("B4 copy\n");
+						strcpy(val[0].parameterValue, jsonValue);
+					}
+					//WAL_FREE(val[0].parameterValue);
+					//WalInfo("Assigning to val struct\n");
+					//val[0].parameterValue = strdup(jsonValue);
+					//WalInfo("Assigning to val struct\n");
+					WalInfo("New val[0].parameterValue is %s\n", val[0].parameterValue);
 				}
 				else
 				{
