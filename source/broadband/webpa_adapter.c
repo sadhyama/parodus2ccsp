@@ -256,23 +256,23 @@ void processRequest(char *reqPayload,char *transactionId, char **resPayload)
                                         {
                                                 resObj->u.paramRes->params[i].name = (char *) malloc(sizeof(char) * MAX_PARAMETERNAME_LEN);
                                                 strcpy(resObj->u.paramRes->params[i].name, reqObj->u.setReq->param[i].name);
-                                                WalPrint("Response:> params[%d].name = %s\n",i,resObj->u.paramRes->params[i].name);
+                                                WalInfo("Response:> params[%d].name = %s\n",i,resObj->u.paramRes->params[i].name);
                                                 resObj->u.paramRes->params[i].value = NULL;
                                                 resObj->u.paramRes->params[i].type = 0;
                                                 
                                         }
                                         
-                                        WalPrint("ret : %d\n",ret);
+                                        WalInfo("ret : %d\n",ret);
                                         for (i = 0; i < paramCount; i++) 
                                         {
                                                 resObj->retStatus[i] = ret;
-                                                WalPrint("Response:> retStatus[%d] = %d\n",i,resObj->retStatus[i]);
+                                                WalInfo("Response:> retStatus[%d] = %d\n",i,resObj->retStatus[i]);
                                         }
                                 }
                                 else
                                 {
                                         resObj->retStatus[0] = ret;
-                                        WalPrint("Response:> resObj->retStatus[0] = %d\n",resObj->retStatus[0]);
+                                        WalInfo("Response:> resObj->retStatus[0] = %d\n",resObj->retStatus[0]);
                                 }
                                 
                         }
@@ -480,21 +480,25 @@ void processRequest(char *reqPayload,char *transactionId, char **resPayload)
 		WalError("Command is NULL\n");
 	}
 
+	WalInfo("B4 wdmp_form_response\n");
         wdmp_form_response(resObj,&payload);
-        WalPrint("payload : %s\n",payload);
+        WalInfo("payload : %s\n",payload);
         *resPayload = payload;
         
-        WalPrint("Response:> Payload = %s\n", *resPayload);
+        WalInfo("Response:> Payload = %s\n", *resPayload);
         
         if(NULL != reqObj)
         {
+		WalInfo("B4 wdmp_free_req_struct\n");
                 wdmp_free_req_struct(reqObj);
+		WalInfo("After wdmp_free_req_struct\n");
         }
         if(NULL != resObj)
         {
+		WalInfo("B4 wdmp_free_res_struct\n");
                 wdmp_free_res_struct(resObj);
         }
-        WalPrint("************** processRequest *****************\n");
+        WalInfo("************** processRequest *****************\n");
 }
 
 /*----------------------------------------------------------------------------*/
