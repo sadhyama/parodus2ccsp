@@ -47,7 +47,9 @@ static int setParamValues(param_t *paramVal, char *CompName, char *dbusPath, int
 static void *applyWiFiSettingsTask();
 static void identifyRadioIndexToReset(int paramCount, parameterValStruct_t* val,BOOL *bRestartRadio1,BOOL *bRestartRadio2,BOOL *bRestartRadio3); 
 BOOL applySettingsFlag;
-
+#ifdef WEBCONFIG_BIN_SUPPORT
+static int prepare_forceSyncValueStruct(parameterValStruct_t* val, param_t *paramVal, char *paramName, char *jsonval);
+#endif
 /*----------------------------------------------------------------------------*/
 /*                             External Functions                             */
 /*----------------------------------------------------------------------------*/
@@ -730,27 +732,44 @@ static int setParamValues(param_t *paramVal, char *CompName, char *dbusPath, int
 			{
 				WalInfo("stringified force sync jsonValue is %s\n", jsonValue);
 
-				if((val[0].parameterValue !=NULL) && (jsonValue !=NULL))
+				if(jsonValue !=NULL)
 				{
-					WalInfo("Free val[0].parameterValue %s and assign new value\n", val[0].parameterValue);
-					int paramvalsize =0, jsonsize = 0, newvalsize = 0;
-
-					paramvalsize = strlen(val[0].parameterValue);
-					jsonsize = strlen(jsonValue);
-					WalInfo("paramvalsize %d jsonsize %d\n", paramvalsize,jsonsize);
-					newvalsize = paramvalsize + (jsonsize - paramvalsize);
-					WalInfo("newvalsize is %d\n", newvalsize);
-					val[0].parameterValue = realloc(val[0].parameterValue, newvalsize + 1);
-					if(val[0].parameterValue)
+					parameterValStruct_t* val_fs = (parameterValStruct_t*) malloc(sizeof(parameterValStruct_t) * paramCount);
+					if(val_fs !=NULL)
 					{
-						WalInfo("B4 copy\n");
-						strcpy(val[0].parameterValue, jsonValue);
+						memset(val_fs,0,(sizeof(parameterValStruct_t) * paramCount));
+						WalInfo("B4 prepare_forceSyncValueStruct\n");
+						char *faultParam_fs =NULL;
+						ret = prepare_forceSyncValueStruct(&val_fs[0], &paramVal[0], paramName, jsonValue);
+						if(!ret)
+						{
+							WalInfo("Created val_fs struct\n");
+							WalInfo("New val_fs[0].parameterName is %s\n", val_fs[0].parameterName);
+							WalInfo("New val_fs[0].parameterValue is %s\n", val_fs[0].parameterValue);
+							WalInfo("New val_fs[0].type is %d\n", val_fs[0].type);
+							ret = CcspBaseIf_setParameterValues(bus_handle, CompName, dbusPath, 0, writeID, val_fs, paramCount, TRUE, &faultParam_fs);
+							WalInfo("After force sync ccsp set . ret is %d\n", ret);
+							free_set_param_values_memory(val_fs,paramCount,faultParam_fs);
+							WalInfo("After free_set_param_values_memory force sync\n");
+							WAL_FREE(jsonValue);
+							WalInfo("B4 free_set_param_values_memory val struct\n");
+							free_set_param_values_memory(val,paramCount,faultParam);
+							WalInfo("return ret %d\n", ret);
+							return ret;
+						}
+						else
+						{
+								WalError("Preparing force sync parameter value struct is Failed \n");
+								free_set_param_values_memory(val_fs,paramCount,faultParam_fs);
+						}
 					}
-					//WAL_FREE(val[0].parameterValue);
-					//WalInfo("Assigning to val struct\n");
-					//val[0].parameterValue = strdup(jsonValue);
-					//WalInfo("Assigning to val struct\n");
-					WalInfo("New val[0].parameterValue is %s\n", val[0].parameterValue);
+					else
+					{
+						WalError("Force sync val_fs memory allocation failed\n");
+					}
+					WalInfo("B4 free jsonValue\n");
+					WAL_FREE(jsonValue);
+					WalInfo("After free jsonValue\n");
 				}
 				else
 				{
@@ -997,3 +1016,67 @@ static void *applyWiFiSettingsTask()
 	WalPrint("============ End =============\n");
         return NULL;
 }
+#ifdef WEBCONFIG_BIN_SUPPORT
+/**
+ * @brief prepare_forceSyncValueStruct returns parameter values
+ *
+ * @param[out] val parameter value Array
+ * @param[in] paramVal parameter value Array
+ * @param[in] paramName parameter name
+ */
+
+static int prepare_forceSyncValueStruct(parameterValStruct_t* val, param_t *paramVal, char *paramName, char *jsonval)
+{
+	val->parameterName = malloc( sizeof(char) * MAX_PARAMETERNAME_LEN);
+
+	if(val->parameterName == NULL)
+	{
+		return WDMP_FAILURE;
+	}
+	strcpy(val->parameterName,paramName);
+
+	val->parameterValue = jsonval;
+	WalInfo("prepare_forceSyncValueStruct. val->parameterValue is %s\n", val->parameterValue);
+
+	switch(paramVal->type)
+	{
+		case 0:
+				val->type = ccsp_string;
+				break;
+		case 1:
+				val->type = ccsp_int;
+				break;
+		case 2:
+				val->type = ccsp_unsignedInt;
+				break;
+		case 3:
+				val->type = ccsp_boolean;
+				break;
+		case 4:
+				val->type = ccsp_dateTime;
+				break;
+		case 5:
+				val->type = ccsp_base64;
+				break;
+		case 6:
+				val->type = ccsp_long;
+				break;
+		case 7:
+				val->type = ccsp_unsignedLong;
+				break;
+		case 8:
+				val->type = ccsp_float;
+				break;
+		case 9:
+				val->type = ccsp_double;
+				break;
+		case 10:
+				val->type = ccsp_byte;
+				break;
+		default:
+				val->type = ccsp_none;
+				break;
+	}
+	return WDMP_SUCCESS;
+}
+#endif
