@@ -796,18 +796,18 @@ int registerWebcfgEvent(WebConfigEventCallback webcfgEventCB)
 {
 	int ret = 0;
 
-	CcspBaseIf_SetCallback2(bus_handle, "webconfigSignal",
+	CcspBaseIf_SetCallback2(bus_handle, "webconfig.signal",
             webcfgEventCB, NULL);
 
-	ret = CcspBaseIf_Register_Event(bus_handle, NULL, "webconfigSignal");
+	ret = CcspBaseIf_Register_Event(bus_handle, NULL, "webconfig.signal");
 	WebcfgInfo("registerWebcfgEvent ret is %d\n", ret);
 	if (ret != 100)
 	{
-		WebcfgError("CcspBaseIf_Register_Event failed for webconfigSignal\n");
+		WebcfgError("CcspBaseIf_Register_Event failed for webconfig.signal\n");
 	}
 	else
 	{
-		WebcfgInfo("Registration with CCSP Bus is success, waiting for events from components\n");
+		WebcfgInfo("webconfig.signal Registration with CCSP Bus is success, waiting for events from components\n");
 		return 1;
 	}
 	return 0;
@@ -817,11 +817,11 @@ int unregisterWebcfgEvent()
 {
 	int ret = 0;
 
-	ret = CcspBaseIf_UnRegister_Event(bus_handle, NULL, "webconfigSignal");
+	ret = CcspBaseIf_UnRegister_Event(bus_handle, NULL, "webconfig.signal");
 	WebcfgInfo("unregisterWebcfgEvent ret is %d\n", ret);
 	if (ret != 100)
 	{
-		WebcfgError("CcspBaseIf_UnRegister_Event failed for webconfigSignal\n");
+		WebcfgError("CcspBaseIf_UnRegister_Event failed for webconfig.signal\n");
 	}
 	else
 	{
