@@ -1167,7 +1167,9 @@ static int waitForComponentReady(char *compName, char *dbusPath)
 	int count = 0;
 	while(1)
 	{
+		WalInfo("B4 checkComponentHealthStatus %s\n", compName);
 		checkComponentHealthStatus(compName, dbusPath, status,&ret);
+		WalInfo("After checkComponentHealthStatus ret %d status %s\n", ret, status);
 		if(ret == CCSP_SUCCESS && (strcmp(status, "Green") == 0))
 		{
                         WalInfo("%s component health is %s, continue\n", compName, status);
@@ -1188,6 +1190,7 @@ static int waitForComponentReady(char *compName, char *dbusPath)
 			sleep(5);
 		}
 	}
+	WalInfo("checkComponentHealthStatus done\n");
 	return ret;
 }
 
@@ -1208,6 +1211,7 @@ static void checkComponentHealthStatus(char * compName, char * dbusPath, char *s
 	char l_Subsystem[MAX_DBUS_INTERFACE_LEN] = { 0 };
 	
 	sprintf(tmp,"%s.%s",compName, "Health");
+	WalInfo("checkComponentHealthStatus: tmp %s\n", tmp);
 	parameterNames[0] = tmp;
 #if !defined(RDKB_EMU)
 	walStrncpy(l_Subsystem, "eRT.",sizeof(l_Subsystem));
@@ -1223,9 +1227,11 @@ static void checkComponentHealthStatus(char * compName, char * dbusPath, char *s
 		strcpy(status, parameterval[0]->parameterValue);
 		WalPrint("status of component:%s\n", status);
 	}
+	WalInfo("checkComponentHealthStatus : B4 free_parameterValStruct_t\n");
 	free_parameterValStruct_t (bus_handle, val_size, parameterval);
-	
+	WalInfo("checkComponentHealthStatus: After free\n");
 	*retStatus = ret;
+	WalInfo("checkComponentHealthStatus end, ret %d\n", ret);
 }
 
 /**
