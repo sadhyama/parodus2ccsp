@@ -57,6 +57,7 @@ static void identifyRadioIndexToReset(int paramCount, parameterValStruct_t* val,
 BOOL applySettingsFlag;
 #ifdef WEBCONFIG_BIN_SUPPORT
 #define WEBCFG_FORCE_SYNC_PARAM "Device.X_RDK_WebConfig.ForceSync"
+#define WEBCFG_FORCE_RESET_PARAM "Device.X_RDK_WebConfig.webcfgSubdocForceReset"
 static int prepare_forceSyncValueStruct(parameterValStruct_t* val, param_t *paramVal, char *paramName, char *jsonval);
 #endif
 /*----------------------------------------------------------------------------*/
@@ -220,17 +221,25 @@ void setValues(const param_t paramVal[], const unsigned int paramCount, const in
 		  	WalPrint("After getParamValues index = %d , retCount =  %d\n",index,retCount);
                         if(ret != CCSP_SUCCESS)
                         {
-                                WalError("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
-                                OnboardLog("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
-                                getFlag = 1;
+				//To skip get atomic caching for webcfg force reset param as Get handler is not available for this param.
+				if(!strcmp(ParamGroup[i].parameterName,WEBCFG_FORCE_RESET_PARAM))
+				{
+					WalInfo("Skipped get atomic caching for % param and proceeding with SET\n", WEBCFG_FORCE_RESET_PARAM);
+				}
+				else
+				{
+		                        WalError("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
+		                        OnboardLog("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
+		                        getFlag = 1;
 
-                                for(cnt1=index-1;cnt1>=0;cnt1--)
-                                {
-                                        WAL_FREE(storeGetValue[cnt1]->name);
-                                        WAL_FREE(storeGetValue[cnt1]->value);
-                                        WAL_FREE(storeGetValue[cnt1]);
-                                }
-                                break;
+		                        for(cnt1=index-1;cnt1>=0;cnt1--)
+		                        {
+		                                WAL_FREE(storeGetValue[cnt1]->name);
+		                                WAL_FREE(storeGetValue[cnt1]->value);
+		                                WAL_FREE(storeGetValue[cnt1]);
+		                        }
+		                        break;
+				}
                         }
                         else
                         {		 
