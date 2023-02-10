@@ -216,30 +216,33 @@ void setValues(const param_t paramVal[], const unsigned int paramCount, const in
                         }
                         
                         WalPrint("B4 getParamValues index = %d\n", index);
-                        //GET values for rollback purpose
-                        ret = getParamValues(ParamGroup[i].parameterName, ParamGroup[i].parameterCount, ParamGroup[i].comp_name, ParamGroup[i].dbus_path, timeSpan, index, 0, &storeGetValue,&retCount);
-		  	WalPrint("After getParamValues index = %d , retCount =  %d\n",index,retCount);
+
+			//To skip GET call for Webcfg Force reset param as Get handler is not defined.
+			WalInfo("ParamGroup[i].parameterName:%s, WEBCFG_FORCE_RESET_PARAM:%s\n", ParamGroup[i].parameterName, WEBCFG_FORCE_RESET_PARAM);
+			WalInfo("!strcmp returns %d\n", !strcmp(ParamGroup[i].parameterName,WEBCFG_FORCE_RESET_PARAM));
+			if(!strcmp(ParamGroup[i].parameterName,WEBCFG_FORCE_RESET_PARAM))
+			{
+				WalInfo("Skipped get atomic caching for %s param and proceeding with SET\n", WEBCFG_FORCE_RESET_PARAM);
+				ret = CCSP_SUCCESS;
+			}
+			else //GET values for rollback purpose
+			{
+				ret = getParamValues(ParamGroup[i].parameterName, ParamGroup[i].parameterCount, ParamGroup[i].comp_name, ParamGroup[i].dbus_path, timeSpan, index, 0, &storeGetValue,&retCount);
+				WalPrint("After getParamValues index = %d , retCount =  %d\n",index,retCount);
+			}
                         if(ret != CCSP_SUCCESS)
                         {
-				//To skip get atomic caching for webcfg force reset param as Get handler is not available for this param.
-				if(!strcmp(ParamGroup[i].parameterName,WEBCFG_FORCE_RESET_PARAM))
-				{
-					WalInfo("Skipped get atomic caching for % param and proceeding with SET\n", WEBCFG_FORCE_RESET_PARAM);
-				}
-				else
-				{
-		                        WalError("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
-		                        OnboardLog("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
-		                        getFlag = 1;
+	                        WalError("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
+	                        OnboardLog("Get Atomic Values call failed for ParamGroup[%d]->comp_name :%s ret: %d\n",i,ParamGroup[i].comp_name,ret);
+	                        getFlag = 1;
 
-		                        for(cnt1=index-1;cnt1>=0;cnt1--)
-		                        {
-		                                WAL_FREE(storeGetValue[cnt1]->name);
-		                                WAL_FREE(storeGetValue[cnt1]->value);
-		                                WAL_FREE(storeGetValue[cnt1]);
-		                        }
-		                        break;
-				}
+	                        for(cnt1=index-1;cnt1>=0;cnt1--)
+	                        {
+	                                WAL_FREE(storeGetValue[cnt1]->name);
+	                                WAL_FREE(storeGetValue[cnt1]->value);
+	                                WAL_FREE(storeGetValue[cnt1]);
+	                        }
+	                        break;
                         }
                         else
                         {		 
@@ -487,9 +490,10 @@ static int getParamValues(char *parameterNames[], int paramCount, char *CompName
         }
         else
         {
+	    WalInfo("B4 CcspBase api get\n");
             ret = CcspBaseIf_getParameterValues(bus_handle,CompName,dbusPath,parameterNamesLocal,paramCount, &val_size, &parameterval);
         }
-        WalPrint("----- After GPV ret = %d------\n",ret);
+        WalInfo("----- After GPV ret = %d------\n",ret);
         if (ret != CCSP_SUCCESS)
         {
             WalError("Error:Failed to GetValue for parameters ret: %d\n", ret);
