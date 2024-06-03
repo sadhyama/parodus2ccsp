@@ -353,6 +353,87 @@ void *FactoryResetCloudSync()
 	return NULL;
 }
 
+void SyncNotifyRetryTask()
+{
+	int err = 0;
+	pthread_t threadId;
+
+	err = pthread_create(&threadId, NULL, SyncNotifyRetry, NULL);
+	if (err != 0)
+	{
+		WalError("Error creating SyncNotifyRetry thread :[%s]\n", strerror(err));
+	}
+	else
+	{
+		WalInfo("SyncNotifyRetry Thread created Successfully\n");
+	}
+}
+
+void *SyncNotifyRetry()
+{
+	pthread_detach(pthread_self());
+	char *strCMC = NULL;
+	unsigned int dbCMC;
+	int retryCount = 0;
+	int status = 0;
+	int c=120;
+
+	while(FOREVER())
+	{
+		if(status < 0)
+		{
+			WalError("Failed to get cloud-status from parodus. Retrying after %d seconds\n", BACKOFF_MAX_RETRY_SEC);
+			sleep(BACKOFF_MAX_RETRY_SEC);
+		}
+		else
+		{
+			WalInfo("wait for 5mins and check CMC value\n");
+			sleep(5 * 60);
+		}
+		//check cloud-status
+		WalPrint("check cloud-status\n");
+		status = getConnCloudStatus(deviceMAC);
+		WalPrint("getConnCloudStatus : status returned is %d\n", status);
+		if(status==1)
+		{
+			//check CMC
+			WalPrint("check CMC \n");
+			strCMC = getParameterValue(PARAM_CMC);
+			if(strCMC == NULL)
+			{
+				WalError("Unable to get strCMC value\n");
+				return NULL;
+			}
+			if (strCMC != NULL && strcmp(strCMC, "0") != 0)
+			{
+				WalInfo("strCMC value is %s\n", strCMC);
+				dbCMC = atoi(strCMC);
+				//If device CMC is not 512 after 5 mins, then cloud and device are out of sync and need to retry sending sync notification.
+				if(dbCMC != CHANGED_BY_XPC)
+				{
+					//retry sync notification for cloud CPE sync
+					WalPrint("Device is out of sync after 5 mins, Retry sending sync notification\n");
+					NotifyData *notifyData = (NotifyData *)malloc(sizeof(NotifyData));
+					memset(notifyData,0,sizeof(NotifyData));
+						notifyData->type = PARAM_NOTIFY;
+					processNotification(notifyData);
+					WalPrint("SyncNotifyRetry : processNotification done\n");
+					retryCount++;
+				}
+			}
+			else
+			{
+				WalInfo("CMC is zero, FR case. No need to retry sync notifcation\n");
+				retryCount = 0;
+				WAL_FREE(strCMC);
+				break;
+			}
+			WAL_FREE(strCMC);
+			WalInfo("Sync notify retryCount is %d\n", retryCount);
+		}
+	}
+	return NULL;
+}
 
 void ccspWebPaValueChangedCB(parameterSigStruct_t* val, int size, void* user_data)
 {
@@ -1158,6 +1239,9 @@ void processNotification(NotifyData *notifyData)
 				//Added delay of 5s to fix wifi captive portal issue where sync notifications are sent before wifi updates the parameter values in device DB
 				WalInfo("Sleeping for 5 sec before sending SYNC_NOTIFICATION\n");
 				sleep(5);
+				//check if CPE is in sync with cloud based on CMC. If CMC is not 512 after 5mins, retry sync notification in loop.
+				SyncNotifyRetryTask();
+				WalInfo("SyncNotifyRetryTask done\n");
 	        	}
 	        		break;
 
