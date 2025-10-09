@@ -22,6 +22,11 @@
     #define WEBPA_CFG_FILE                      "/tmp/webpa_cfg.json"
 #endif
 #define SYNC_NOTIFY_PARAM_BACKUP_FILE "/tmp/webpa_sync_notification.json"
+#define NOTIFY_PARAM_FILE "/nvram/webpa_notify_param"
+#define DYNAMIC_PARAM 0
+#define STATIC_PARAM 1
+#define OFF 0
+#define ON 1
 /*----------------------------------------------------------------------------*/
 /*                               Data Structures                              */
 /*----------------------------------------------------------------------------*/
@@ -94,6 +99,14 @@ typedef struct
     } u;
 } NotifyData;
 
+typedef struct g_NotifyParam
+{
+    char *paramName;
+    bool paramType;
+    bool paramSubscriptionStatus;
+    struct g_NotifyParam *next;
+} g_NotifyParam;
+
 /**
  * @brief Function pointer for Notification callback
  */
@@ -142,3 +155,11 @@ void FR_CloudSyncCheck();
 
 int read_sync_notify_from_file();
 int write_sync_notify_into_file(char *buff);
+
+int readDynamicParamsFromDBFile(char **paramList);
+int writeDynamicParamToDBFile(char *param);
+bool searchParaminGlobalList(const char *paramName);
+void addParamtoGlobalList(const char* paramName, bool paramType, bool paramSubscriptionStatus);
+void freeGlobalNotifyList();
+bool updateParamInGlobalList(const char* paramName, bool newType, bool newStatus);
+void CreateJsonFromGlobalNotifyList(char **paramList);

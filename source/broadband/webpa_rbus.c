@@ -9,6 +9,11 @@
 static rbusHandle_t rbus_handle;
 static bool isRbus = false;
 
+rbusDataElement_t dataElements[1] = {
+    {WEBPA_NOTIFY_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {NotifyParamGetHandler, NULL, NULL, NULL, NULL, NULL}}
+    // {WEBPA_SUBSCRIBE_LIST, RBUS_ELEMENT_TYPE_METHOD, {NULL, NULL, NULL, NULL, NULL, NotifyParamMethodHandler}}
+};
+
 bool isRbusEnabled()
 {
         if(RBUS_ENABLED == rbus_checkStatus())
@@ -123,4 +128,84 @@ rbusError_t clearTraceContext()
 	else {
 		WalError("Rbus not initialized in clearTraceContext funcion\n");
         }
+}
+
+/**
+ * Register data elements for data model and methods implementation using rbus.
+ */
+int regWebPaDataModel()
+{
+    rbusError_t rc = RBUS_ERROR_BUS_ERROR;
+    if(!rbus_handle)
+    {
+        WalError("regWebPaDataModel failed in getting bus handles\n");
+        return rc;
+    }
+
+	rc = rbus_regDataElements(rbus_handle, 1, dataElements);
+
+    if(rc == RBUS_ERROR_SUCCESS)
+    {
+		WalInfo("Registered data element %s with rbus \n ", WEBPA_NOTIFY_PARAM);
+    }
+    else
+	{
+		WalError("Failed in registering data element %s \n", WEBPA_NOTIFY_PARAM);
+	}
+	return rc;
+}
+
+/**
+ * Un-Register data elements for dataModel implementation using rbus.
+ */
+int UnregWebPaDataModel()
+{
+    rbusError_t rc = RBUS_ERROR_BUS_ERROR;
+    if(!rbus_handle)
+    {
+        WalError("regWebPaDataModel failed in getting bus handles\n");
+        return rc;
+    }
+
+	rc = rbus_unregDataElements(rbus_handle, 1, dataElements);
+    if(rc == RBUS_ERROR_SUCCESS)
+    {
+		WalInfo("Registered data element %s with rbus \n ", WEBPA_NOTIFY_PARAM);
+    }
+    else
+	{
+		WalError("Failed in registering data element %s \n", WEBPA_NOTIFY_PARAM);
+	}
+	return rc;
+}
+
+rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
+{
+    (void)handle;
+    (void)opts;
+    WalInfo("NotifyParamGetHandler is called\n");
+
+    const char* paramName = rbusProperty_GetName(property);
+    if(strncmp(paramName, WEBPA_NOTIFY_PARAM, strlen(WEBPA_NOTIFY_PARAM)) != 0)
+    {
+        WalError("Unexpected parameter = %s\n", paramName);
+        return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    }
+
+    char* buffer = NULL;
+    CreateJsonFromGlobalNotifyList(&buffer);
+
+    if(buffer == NULL)
+    {
+        WalError("NotifyParamGetHandler: Failed to generate JSON from notify param list.\n");
+        return RBUS_ERROR_BUS_ERROR;
+    }
+
+    rbusValue_t value;
+    rbusValue_Init(&value);
+    rbusValue_SetString(value, buffer);
+    rbusProperty_SetValue(property, value);
+    rbusValue_Release(value);
+    free(buffer);
+    return RBUS_ERROR_SUCCESS;
 }
