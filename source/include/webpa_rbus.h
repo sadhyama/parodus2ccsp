@@ -12,12 +12,10 @@
 #include <cimplog.h>
 
 #include <dslh_definitions_database.h>
-// #include "webpa_notification.h"
 
 #define MAX_PARAM_LEN 256
-
 #define WEBPA_NOTIFY_PARAM "Device.Webpa.NotifyParameters"
-#define WEBPA_SUBSCRIBE_LIST "Device.Webpa.Subscription.NotifyEvent()"
+#define WEBPA_NOTIFY_SUBSCRIPTION "Device.Webpa.Subscription.NotifyEvent()"
 
 bool isRbusEnabled();
 bool isRbusInitialized();
@@ -29,5 +27,5 @@ rbusError_t clearTraceContext();
 int regWebPaDataModel();
 int UnregWebPaDataModel();
 rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts);
-// rbusError_t NotifyParamMethodHandler(rbusHandle_t handle, const char* methodName, rbusObject_t inParams, rbusObject_t outParams, rbusMethodAsyncHandle_t asyncHandle);
+rbusError_t NotifyParamMethodHandler(rbusHandle_t handle, const char* methodName, rbusObject_t inParams, rbusObject_t outParams, rbusMethodAsyncHandle_t asyncHandle);
 #endif

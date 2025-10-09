@@ -813,7 +813,7 @@ static void setInitialNotify()
 			WalInfo("Dynamic params read from DB file successfully: %s\n",dynamic_param_list);
 			char *token;
 			token = strtok(dynamic_param_list, ",");
-			while (token != NULL)
+			while (token != NULL) 
 			{
 				WalInfo("Adding Dynamic param: %s into global list\n", token);
 				addParamtoGlobalList(token,DYNAMIC_PARAM,OFF);
@@ -824,9 +824,10 @@ static void setInitialNotify()
 		}
 		else
 		{
-			WalError("Failed to read dynamic params from DB file\n");
+			WalInfo("Failed to read dynamic params from DB file\n");
 		}
 
+		
 		do
 		{
 			if(backoffRetryTime < max_retry_sleep)
@@ -842,7 +843,7 @@ static void setInitialNotify()
 			currentParam = g_NotifyParamList;
 			for (i = 0; currentParam && (i < notifyListSize); i++)
 			{
-				if (currentParam->paramSubscriptionStatus == 0)
+				if (currentParam->paramSubscriptionStatus == OFF)
 				{
 					snprintf(notif, sizeof(notif), "%d", 1);
 					attArr[0].value = (char *) malloc(sizeof(char) * 20);
@@ -854,13 +855,13 @@ static void setInitialNotify()
 					if (ret != WDMP_SUCCESS)
 					{
 						isError = 1;
-						currentParam->paramSubscriptionStatus = 0;
+						currentParam->paramSubscriptionStatus = OFF;
 						WalError("Failed to turn notification ON for parameter : %s ret: %d Attempt Number: %d\n",
 								currentParam->paramName, ret, retry + 1);
 					}
 					else
 					{
-						currentParam->paramSubscriptionStatus = 1;
+						currentParam->paramSubscriptionStatus = ON;
 						WalInfo("Successfully set notification ON for parameter : %s ret: %d\n",currentParam->paramName, ret);
 					}
 					WAL_FREE(attArr[0].value);
@@ -2327,30 +2328,30 @@ void freeGlobalNotifyList()
     pthread_mutex_unlock(&g_NotifyParamMut);
 }
 
-bool updateParamInGlobalList(const char* paramName, bool newType, bool newStatus)
-{
-    if (!paramName)
-	{
-		WalError("Invalid parameter name\n");
-		return false;
-	}
+// bool updateParamInGlobalList(const char* paramName, bool newType, bool newStatus)
+// {
+//     if (!paramName)
+// 	{
+// 		WalError("Invalid parameter name\n");
+// 		return false;
+// 	}
 
-    pthread_mutex_lock(&g_NotifyParamMut);
-    g_NotifyParam* curr = g_NotifyParamList;
-    while (curr)
-    {
-        if (strcmp(curr->paramName, paramName) == 0)
-        {
-            curr->paramType = newType;
-            curr->paramSubscriptionStatus = newStatus;
-            pthread_mutex_unlock(&g_NotifyParamMut);
-            return true;
-        }
-        curr = curr->next;
-    }
-    pthread_mutex_unlock(&g_NotifyParamMut);
-    return false;
-}
+//     pthread_mutex_lock(&g_NotifyParamMut);
+//     g_NotifyParam* curr = g_NotifyParamList;
+//     while (curr)
+//     {
+//         if (strcmp(curr->paramName, paramName) == 0)
+//         {
+//             curr->paramType = newType;
+//             curr->paramSubscriptionStatus = newStatus;
+//             pthread_mutex_unlock(&g_NotifyParamMut);
+//             return true;
+//         }
+//         curr = curr->next;
+//     }
+//     pthread_mutex_unlock(&g_NotifyParamMut);
+//     return false;
+// }
 
 int writeDynamicParamToDBFile(char *param)
 {
@@ -2390,10 +2391,10 @@ int readDynamicParamsFromDBFile(char **paramList)
 	}
 
 	fp = fopen(NOTIFY_PARAM_FILE , "r");
-	if (fp == NULL)
+    if (fp == NULL)
 	{
-		WalError("Failed to open file for read %s\n", NOTIFY_PARAM_FILE);
-		return 0;
+		WalError("Failed to open '%s' for read. errno=%d (%s)\n", NOTIFY_PARAM_FILE, errno, strerror(errno));
+		return NULL;
 	}
 
     // Move to end to determine file size
@@ -2401,9 +2402,9 @@ int readDynamicParamsFromDBFile(char **paramList)
     file_size = ftell(fp);
     rewind(fp);  // Go back to beginning
 
-	if(file_size == 0)
+	if(file_size <= 0)
 	{
-		WalError("Dynamic parameter list was empty in this device\n");
+		WalError("Dynamic parameter list is empty\n");
         fclose(fp);
 		return 0;
 	}
@@ -2420,6 +2421,7 @@ int readDynamicParamsFromDBFile(char **paramList)
     read_size = fread(*paramList, 1, file_size, fp);
     (*paramList)[read_size] = '\0';  // Null-terminate string
 	fclose(fp);
+	WalInfo("Successfully read %zu bytes from %s\n", read_size, NOTIFY_PARAM_FILE);
 	return 1;
 }
 
@@ -2428,18 +2430,19 @@ void CreateJsonFromGlobalNotifyList(char **paramList)
 	pthread_mutex_lock(&g_NotifyParamMut);
 	g_NotifyParam *temp = g_NotifyParamList;
 	cJSON *jsonArray = cJSON_CreateArray();
-	while (temp != NULL)
+    while (temp != NULL) 
 	{
-		cJSON *item = cJSON_CreateObject();
+        cJSON *item = cJSON_CreateObject();
 
-		cJSON_AddStringToObject(item, "ParamName", temp->paramName);
-		cJSON_AddStringToObject(item, "Type", temp->paramType?"Static":"Dynamic");
-		cJSON_AddStringToObject(item, "Status", temp->paramSubscriptionStatus?"ON":"OFF");
+        cJSON_AddStringToObject(item, "ParamName", temp->paramName);
+        cJSON_AddStringToObject(item, "Type", temp->paramType?"Static":"Dynamic");
+        cJSON_AddStringToObject(item, "Status", temp->paramSubscriptionStatus?"ON":"OFF");
 
-		cJSON_AddItemToArray(jsonArray, item);
-		temp = temp->next;
-	}
+        cJSON_AddItemToArray(jsonArray, item);
+        temp = temp->next;
+    }
 	pthread_mutex_unlock(&g_NotifyParamMut);
 	*paramList = cJSON_PrintUnformatted(jsonArray);
 	cJSON_Delete(jsonArray);
 }
+

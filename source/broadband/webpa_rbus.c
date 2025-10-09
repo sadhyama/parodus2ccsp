@@ -9,10 +9,11 @@
 static rbusHandle_t rbus_handle;
 static bool isRbus = false;
 
-rbusDataElement_t dataElements[1] = {
-    {WEBPA_NOTIFY_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {NotifyParamGetHandler, NULL, NULL, NULL, NULL, NULL}}
-    // {WEBPA_SUBSCRIBE_LIST, RBUS_ELEMENT_TYPE_METHOD, {NULL, NULL, NULL, NULL, NULL, NotifyParamMethodHandler}}
+rbusDataElement_t dataElements[] = {
+    {WEBPA_NOTIFY_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {NotifyParamGetHandler, NULL, NULL, NULL, NULL, NULL}},
+    {WEBPA_NOTIFY_SUBSCRIPTION, RBUS_ELEMENT_TYPE_METHOD, {NULL, NULL, NULL, NULL, NULL, NotifyParamMethodHandler}}
 };
+#define dataElementsCount sizeof(dataElements)/sizeof(dataElements[0])
 
 bool isRbusEnabled()
 {
@@ -142,7 +143,7 @@ int regWebPaDataModel()
         return rc;
     }
 
-	rc = rbus_regDataElements(rbus_handle, 1, dataElements);
+	rc = rbus_regDataElements(rbus_handle, dataElementsCount, dataElements);
 
     if(rc == RBUS_ERROR_SUCCESS)
     {
@@ -167,7 +168,7 @@ int UnregWebPaDataModel()
         return rc;
     }
 
-	rc = rbus_unregDataElements(rbus_handle, 1, dataElements);
+	rc = rbus_unregDataElements(rbus_handle, dataElementsCount, dataElements);
     if(rc == RBUS_ERROR_SUCCESS)
     {
 		WalInfo("Registered data element %s with rbus \n ", WEBPA_NOTIFY_PARAM);
@@ -209,3 +210,119 @@ rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, 
     free(buffer);
     return RBUS_ERROR_SUCCESS;
 }
+
+rbusError_t NotifyParamMethodHandler(
+    rbusHandle_t handle,
+    const char* methodName,
+    rbusObject_t inParams,
+    rbusObject_t outParams,
+    rbusMethodAsyncHandle_t asyncHandle)
+{
+    (void)handle;
+    (void)methodName;
+    (void)asyncHandle;
+
+    WalInfo("NotifyParamMethodHandler invoked\n");
+
+    rbusValue_t message = NULL;
+    rbusValue_t statusCode = NULL;
+    WDMP_STATUS wret = WDMP_FAILURE;
+    int prop_count  = 0, success = 0, failed =0;
+
+    rbusValue_Init(&message);
+    rbusValue_Init(&statusCode);
+
+/* Extract inParams */
+    rbusProperty_t props = rbusObject_GetProperties(inParams);
+    prop_count = props ? rbusProperty_Count(props) : 0;
+
+    if (prop_count == 0)
+    {
+        WalError("No parameters provided\n");
+        rbusValue_SetString(message, "No parameters provided");
+        rbusValue_SetInt32(statusCode, 400);
+        goto set_response;
+    }
+
+    for (int i = 0; i < prop_count; i++)
+    {
+        char keyName[64];
+        param_t att;
+        memset(&att, 0, sizeof(att));
+        snprintf(keyName, sizeof(keyName), "param%d", i);
+        rbusValue_t paramVal = rbusObject_GetValue(inParams, keyName);
+        if (!paramVal || rbusValue_GetType(paramVal) != RBUS_OBJECT)
+        {
+            WalError("Missing/Invalid object structure for %s\n", keyName);
+            continue;
+        }
+        rbusObject_t subObj = rbusValue_GetObject(paramVal);
+        if (!subObj)
+        {
+            WalError("Invalid object structure for %s\n", keyName);
+            continue;
+        }
+
+        rbusValue_t val = NULL;
+        const char* name = NULL;
+        const char* notifType = NULL;
+
+        val = rbusObject_GetValue(subObj, "name");
+        if (val && rbusValue_GetType(val) == RBUS_STRING)
+            name = rbusValue_GetString(val, NULL);
+
+        val = rbusObject_GetValue(subObj, "notificationType");
+        if (val && rbusValue_GetType(val) == RBUS_STRING)
+            notifType = rbusValue_GetString(val, NULL);
+
+        WalInfo("%s: name=%s, notificationType=%s\n", keyName, name ? name : "NULL", notifType ? notifType : "NULL");
+
+        if (!name || !*name) continue;
+        if (notifType == NULL || strcmp(notifType, "ValueChange") != 0) continue;
+
+        if(!searchParaminGlobalList(name))
+        {
+            att.name = strdup(name);
+            att.value = strdup("1");
+            att.type = WDMP_INT;
+            setAttributes(&att, 1, NULL, &wret);
+            if (wret == WDMP_SUCCESS)
+            {
+                addParamtoGlobalList(att.name, DYNAMIC_PARAM, ON);
+                if (!writeDynamicParamToDBFile(name))
+                {
+                    WalError("Write to DB file failed for '%s'\n", name);
+                }
+                WalInfo("Successfully set notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
+                success++;
+            }
+            else
+            {
+                failed++;
+                WalError("Failed to turn notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
+            }
+            WAL_FREE(att.name);
+            WAL_FREE(att.value);
+        }
+        else
+        {
+            WalInfo("Parameter '%s' already exists in globallist. \n", name);
+        }
+    }
+
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "Subscription processed. Success: %d Failed: %d", success, failed);
+    rbusValue_SetString(message, buffer);
+    rbusValue_SetInt32(statusCode, 200);
+
+set_response:
+    if (message) rbusObject_SetValue(outParams, "message", message);
+    if (statusCode) rbusObject_SetValue(outParams, "statusCode", statusCode);
+    const char* finalMsg = rbusValue_GetString(message, NULL);
+    WalInfo("NotifyParamMethodHandler completed: %s\n", finalMsg ? finalMsg : "SUBSCRIPTION STATUS UNKNOWN");
+    if (message) rbusValue_Release(message);
+    if (statusCode) rbusValue_Release(statusCode);
+    return RBUS_ERROR_SUCCESS;
+}
+
+

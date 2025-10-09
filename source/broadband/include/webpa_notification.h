@@ -23,10 +23,10 @@
 #endif
 #define SYNC_NOTIFY_PARAM_BACKUP_FILE "/tmp/webpa_sync_notification.json"
 #define NOTIFY_PARAM_FILE "/nvram/webpa_notify_param"
-#define DYNAMIC_PARAM 0
-#define STATIC_PARAM 1
-#define OFF 0
-#define ON 1
+// #define DYNAMIC_PARAM 0
+// #define STATIC_PARAM 1
+// #define OFF 0
+// #define ON 1
 /*----------------------------------------------------------------------------*/
 /*                               Data Structures                              */
 /*----------------------------------------------------------------------------*/

@@ -39,6 +39,11 @@ extern int numLoops;
 #define OnboardLog(...)
 #endif
 
+#define DYNAMIC_PARAM 0
+#define STATIC_PARAM 1
+#define OFF 0
+#define ON 1
+
 /**
  * @brief Set operations supported by WebPA.
  */
