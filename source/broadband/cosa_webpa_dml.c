@@ -8,6 +8,7 @@
 #include "webpa_internal.h"
 #include "webpa_notification.h"
 
+#define WEBPA_NOTIFY_PARAM "Device.Webpa.NotifyParameters"
 #define WEBPA_PARAM_VERSION                 "Device.X_RDKCENTRAL-COM_Webpa.Version"
 #define WEBPA_PARAM_PROTOCOL_VERSION        "Device.DeviceInfo.Webpa.X_COMCAST-COM_SyncProtocolVersion"
 #define WiFi_FactoryResetRadioAndAp	    "Device.WiFi.X_CISCO_COM_FactoryResetRadioAndAp"
@@ -731,18 +732,41 @@ int getWebpaParameterValues(char **parameterNames, int paramCount, int *val_size
                     }
                     case 2:
                     {
-                        WalError("%s parameter GET is not supported through webpa\n",parameterNames[i]);
-                        OnboardLog("%s parameter GET is not supported through webpa\n",parameterNames[i]);
-                        *val = NULL;
-                        *val_size = 0;
-                        for(k=k-1;k>=0;k--)
+                        if((isWildcard == 0) && (strcmp(parameterNames[i], WEBPA_NOTIFY_PARAM) == 0)) // Device.Webpa.NotifyParameters
                         {
-                            WAL_FREE(paramVal[k]->parameterName);
-                            WAL_FREE(paramVal[k]->parameterValue);
-                            WAL_FREE(paramVal[k]);
+                            paramVal[k] = (parameterValStruct_t *) malloc(sizeof(parameterValStruct_t));
+                            paramVal[k]->parameterName = strndup(WEBPA_NOTIFY_PARAM, MAX_PARAMETERNAME_LEN);
+                            paramVal[k]->parameterValue = (char*) malloc(sizeof(char)*MAX_PARAMETERVALUE_LEN);
+                            char *paramList = NULL;
+                            paramList = CreateJsonFromGlobalNotifyList();
+                            if(paramList != NULL && strlen(paramList) > 0)
+                            {
+                                snprintf(paramVal[k]->parameterValue,sizeof(char)*MAX_PARAMETERVALUE_LEN,"%s",paramList);
+                            }
+                            else
+                            {
+                                snprintf(paramVal[k]->parameterValue,sizeof(char)*MAX_PARAMETERVALUE_LEN,"%s","Global param list is empty");
+                                WalError("Global param list is empty\n");
+                            }
+                            paramVal[k]->type = ccsp_string;
+				            k++;
+                            WAL_FREE(paramList);
                         }
-                        WAL_FREE(paramVal);
-                        return CCSP_ERR_METHOD_NOT_SUPPORTED;
+			            else
+                        {
+                            WalError("%s parameter GET is not supported through webpa\n",parameterNames[i]);
+                            OnboardLog("%s parameter GET is not supported through webpa\n",parameterNames[i]);
+                            *val = NULL;
+                            *val_size = 0;
+                            for(k=k-1;k>=0;k--)
+                            {
+                                WAL_FREE(paramVal[k]->parameterName);
+                                WAL_FREE(paramVal[k]->parameterValue);
+                                WAL_FREE(paramVal[k]);
+                            }
+                            WAL_FREE(paramVal);
+                            return CCSP_ERR_METHOD_NOT_SUPPORTED;
+                        }
                         break;
                     }
 		}

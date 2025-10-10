@@ -194,4 +194,10 @@ void sendNotification(char *payload, char *source, char *destination);
 
 char* parsePayloadForStatus(char *payload);
 
+typedef enum {
+    PARAM_NOT_FOUND,
+    PARAM_FOUND_ON,
+    PARAM_FOUND_OFF
+} paramStatus;
+
 #endif /* _WEBPA_ADAPTER_H_ */

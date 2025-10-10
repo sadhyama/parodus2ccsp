@@ -193,8 +193,7 @@ rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, 
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
     }
 
-    char* buffer = NULL;
-    CreateJsonFromGlobalNotifyList(&buffer);
+    char* buffer = CreateJsonFromGlobalNotifyList();
 
     if(buffer == NULL)
     {
@@ -227,7 +226,7 @@ rbusError_t NotifyParamMethodHandler(
     rbusValue_t message = NULL;
     rbusValue_t statusCode = NULL;
     WDMP_STATUS wret = WDMP_FAILURE;
-    int prop_count  = 0, success = 0, failed =0;
+    int prop_count  = 0, failureCount = 0, successCount = 0;
 
     rbusValue_Init(&message);
     rbusValue_Init(&statusCode);
@@ -242,6 +241,14 @@ rbusError_t NotifyParamMethodHandler(
         rbusValue_SetString(message, "No parameters provided");
         rbusValue_SetInt32(statusCode, 400);
         goto set_response;
+    }
+
+    size_t allocSize = (prop_count ? prop_count : 1) * 128;
+    char *successBuf = calloc(1, allocSize);
+    char *failedBuf  = calloc(1, allocSize);
+    if (!successBuf || !failedBuf) {
+        WalError("malloc failed for buffers\n");
+        return RBUS_ERROR_BUS_ERROR;
     }
 
     for (int i = 0; i < prop_count; i++)
@@ -280,7 +287,8 @@ rbusError_t NotifyParamMethodHandler(
         if (!name || !*name) continue;
         if (notifType == NULL || strcmp(notifType, "ValueChange") != 0) continue;
 
-        if(!searchParaminGlobalList(name))
+        paramStatus found = searchParaminGlobalList(name);
+        if(found == PARAM_NOT_FOUND || found == PARAM_FOUND_OFF)
         {
             att.name = strdup(name);
             att.value = strdup("1");
@@ -293,27 +301,46 @@ rbusError_t NotifyParamMethodHandler(
                 {
                     WalError("Write to DB file failed for '%s'\n", name);
                 }
+                if (successBuf[0] != '\0') {
+                    strncat(successBuf, ", ", allocSize - strlen(successBuf) - 1);
+                }
+                strncat(successBuf, name, allocSize - strlen(successBuf) - 1);
                 WalInfo("Successfully set notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
-                success++;
+                successCount++;
             }
             else
             {
-                failed++;
+                if (failedBuf[0] != '\0') {
+                    strncat(failedBuf, ", ", allocSize - strlen(failedBuf) - 1);
+                }
+                strncat(failedBuf, name, allocSize - strlen(failedBuf) - 1);
                 WalError("Failed to turn notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
+                failureCount++;
             }
             WAL_FREE(att.name);
             WAL_FREE(att.value);
         }
-        else
+        else if(found == PARAM_FOUND_ON)
         {
             WalInfo("Parameter '%s' already exists in globallist. \n", name);
+            continue;
         }
     }
 
-    char buffer[128];
-    snprintf(buffer, sizeof(buffer), "Subscription processed. Success: %d Failed: %d", success, failed);
-    rbusValue_SetString(message, buffer);
-    rbusValue_SetInt32(statusCode, 200);
+    size_t buffSize = snprintf(NULL, 0, "Success: %s Failed: %s", successBuf[0] ? successBuf : "None", failedBuf[0]  ? failedBuf  : "None") + 1;
+    char *buffer = malloc(buffSize);
+    if (buffer) {
+        snprintf(buffer, buffSize, "Success: %s Failed: %s", successBuf[0] ? successBuf : "None", failedBuf[0]  ? failedBuf  : "None");
+        rbusValue_SetString(message, buffer);
+    } else {
+        rbusValue_SetString(message, "UNKNOWN");
+    }
+
+    int http_resp_code;
+    if (failureCount == 0) http_resp_code = 200;
+    else if (successCount == 0) http_resp_code = 500;
+    else http_resp_code = 207;
+    rbusValue_SetInt32(statusCode, http_resp_code);
 
 set_response:
     if (message) rbusObject_SetValue(outParams, "message", message);
@@ -322,6 +349,9 @@ set_response:
     WalInfo("NotifyParamMethodHandler completed: %s\n", finalMsg ? finalMsg : "SUBSCRIPTION STATUS UNKNOWN");
     if (message) rbusValue_Release(message);
     if (statusCode) rbusValue_Release(statusCode);
+    if (successBuf) free(successBuf);
+    if(failedBuf) free(failedBuf);
+    if (buffer) free(buffer);
     return RBUS_ERROR_SUCCESS;
 }
 
