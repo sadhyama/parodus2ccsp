@@ -5,6 +5,8 @@
  *
  * Copyright (c) 2015  Comcast
  */
+#ifndef _WEBPA_NOTIFICATION_H_
+#define _WEBPA_NOTIFICATION_H_
 #include <cJSON.h>
 #include "stdlib.h"
 #include "wdmp-c.h"
@@ -95,14 +97,6 @@ typedef struct
     } u;
 } NotifyData;
 
-typedef struct g_NotifyParam
-{
-    char *paramName;
-    bool paramType;
-    bool paramSubscriptionStatus;
-    struct g_NotifyParam *next;
-} g_NotifyParam;
-
 /**
  * @brief Function pointer for Notification callback
  */
@@ -153,8 +147,10 @@ int read_sync_notify_from_file();
 int write_sync_notify_into_file(char *buff);
 
 char* readDynamicParamsFromDBFile();
-int writeDynamicParamToDBFile(char *param);
-paramStatus searchParaminGlobalList(const char *paramName);
+int writeDynamicParamToDBFile(const char *param);
+g_NotifyParam* searchParaminGlobalList(const char *paramName);
 void addParamToGlobalList(const char* paramName, bool paramType, bool paramSubscriptionStatus);
 char* CreateJsonFromGlobalNotifyList();
-void freeGlobalNotifyList();
+void setInitialNotifyInProgress(bool value);
+bool getInitialNotifyInProgress();
+#endif

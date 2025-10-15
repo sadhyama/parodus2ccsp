@@ -736,12 +736,11 @@ int getWebpaParameterValues(char **parameterNames, int paramCount, int *val_size
                         {
                             paramVal[k] = (parameterValStruct_t *) malloc(sizeof(parameterValStruct_t));
                             paramVal[k]->parameterName = strndup(WEBPA_NOTIFY_PARAM, MAX_PARAMETERNAME_LEN);
-                            paramVal[k]->parameterValue = (char*) malloc(sizeof(char)*MAX_PARAMETERVALUE_LEN);
                             char *paramList = NULL;
                             paramList = CreateJsonFromGlobalNotifyList();
                             if(paramList != NULL && strlen(paramList) > 0)
                             {
-                                snprintf(paramVal[k]->parameterValue,sizeof(char)*MAX_PARAMETERVALUE_LEN,"%s",paramList);
+                                paramVal[k]->parameterValue = strdup(paramList);
                             }
                             else
                             {

@@ -44,6 +44,18 @@ extern int numLoops;
 #define OFF 0
 #define ON 1
 
+typedef struct g_NotifyParam
+{
+    char *paramName;
+    bool paramType;
+    bool paramSubscriptionStatus;
+    struct g_NotifyParam *next;
+} g_NotifyParam;
+
+extern g_NotifyParam *g_NotifyParamHead;
+extern g_NotifyParam *g_NotifyParamTail;
+extern pthread_mutex_t g_NotifyParamMut;
+
 /**
  * @brief Set operations supported by WebPA.
  */
@@ -195,9 +207,12 @@ void sendNotification(char *payload, char *source, char *destination);
 char* parsePayloadForStatus(char *payload);
 
 typedef enum {
-    PARAM_NOT_FOUND,
-    PARAM_FOUND_ON,
-    PARAM_FOUND_OFF
-} paramStatus;
-
+    PROCESS_STATUS_OK               = 200,
+    MULTI_STATUS                    = 207,
+    INVALID_INPUT                   = 400,
+    SUBSCRIPTION_ALREADY_EXIST      = 409,
+    PROCESS_STATUS_ERROR            = 500,
+    BOOTUP_IN_PROGRESS              = 503,
+    PROCESS_TIMEOUT                 = 504
+} HTTP_STATUS;
 #endif /* _WEBPA_ADAPTER_H_ */

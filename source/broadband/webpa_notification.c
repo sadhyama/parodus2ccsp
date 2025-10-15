@@ -85,9 +85,9 @@ char *g_systemReadyTime=NULL;
 pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t con=PTHREAD_COND_INITIALIZER;
 pthread_mutex_t device_mac_mutex = PTHREAD_MUTEX_INITIALIZER;
-static g_NotifyParam *g_NotifyParamList = NULL;
-static g_NotifyParam *g_NotifyParamTail = NULL;
-static pthread_mutex_t g_NotifyParamMut = PTHREAD_MUTEX_INITIALIZER;
+g_NotifyParam *g_NotifyParamHead = NULL;
+g_NotifyParam *g_NotifyParamTail = NULL;
+pthread_mutex_t g_NotifyParamMut = PTHREAD_MUTEX_INITIALIZER;
 
 const char * notifyparameters[]={
 "Device.NotifyComponent.X_RDKCENTRAL-COM_Connected-Client",
@@ -238,6 +238,8 @@ const char * notifyparameters[]={
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.SafeBrowsing.Enable",
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.Softflowd.Enable"
 };
+
+bool initialNotifyInProgress = false;
 /*----------------------------------------------------------------------------*/
 /*                             Function Prototypes                            */
 /*----------------------------------------------------------------------------*/
@@ -803,7 +805,7 @@ static void setInitialNotify()
 		for (i = 0; i < notifyListSize; i++)
 		{
 			//Adding static params to global param list
-			addParamtoGlobalList(notifyparameters[i],STATIC_PARAM,OFF);
+			addParamToGlobalList(notifyparameters[i],STATIC_PARAM,OFF);
 		}
 
 		//Adding dynamic params into global param list
@@ -816,7 +818,7 @@ static void setInitialNotify()
 			while (token != NULL) 
 			{
 				WalInfo("Adding Dynamic param: %s into global list\n", token);
-				addParamtoGlobalList(token,DYNAMIC_PARAM,OFF);
+				addParamToGlobalList(token,DYNAMIC_PARAM,OFF);
 				notifyListSize++;
 				token = strtok(NULL, ",");
 			}
@@ -827,7 +829,8 @@ static void setInitialNotify()
 			WalInfo("Failed to read dynamic params from DB file\n");
 		}
 
-
+		// Set flag to true for initial notification
+		setInitialNotifyInProgress(true);
 		do
 		{
 			if(backoffRetryTime < max_retry_sleep)
@@ -840,7 +843,7 @@ static void setInitialNotify()
 			isError = 0;
 			WalPrint("notify List Size: %d\n", notifyListSize);
 			attArr = (param_t *) malloc(sizeof(param_t));
-			currentParam = g_NotifyParamList;
+			currentParam = g_NotifyParamHead;
 			for (i = 0; currentParam && (i < notifyListSize); i++)
 			{
 				if (currentParam->paramSubscriptionStatus == OFF)
@@ -895,6 +898,9 @@ static void setInitialNotify()
 
 		} while (retry++ < WEBPA_SET_INITIAL_NOTIFY_RETRY_COUNT);
 
+		// Clear the flag for accepting cloud requests
+		setInitialNotifyInProgress(false);
+		WalInfo("\n initialNotifyInProgress flag is cleared. Cloud requests now allowed.\n");
 
 		WalPrint("**********************End of setInitial Notify************************\n");
 	}
@@ -2252,7 +2258,17 @@ int write_sync_notify_into_file(char *buff)
     return 0;
 }
 
-void addParamtoGlobalList(const char *paramName,bool paramType, bool paramSubscriptionStatus)
+bool getInitialNotifyInProgress()
+{
+    return initialNotifyInProgress;
+}
+
+void setInitialNotifyInProgress(bool value)
+{
+   initialNotifyInProgress  = value;
+}
+
+void addParamToGlobalList(const char *paramName,bool paramType, bool paramSubscriptionStatus)
 {
 	if (!paramName)
     {
@@ -2274,9 +2290,9 @@ void addParamtoGlobalList(const char *paramName,bool paramType, bool paramSubscr
 	node->next = NULL;
 
 	pthread_mutex_lock(&g_NotifyParamMut);
-	if (g_NotifyParamList == NULL)
+	if (g_NotifyParamHead == NULL)
     {
-        g_NotifyParamList = node;
+        g_NotifyParamHead = node;
         g_NotifyParamTail = node;
     }
     else
@@ -2288,52 +2304,25 @@ void addParamtoGlobalList(const char *paramName,bool paramType, bool paramSubscr
 	pthread_mutex_unlock(&g_NotifyParamMut);
 }
 
-paramStatus searchParaminGlobalList(const char *paramName)
+g_NotifyParam* searchParaminGlobalList(const char *paramName)
 {
-	if (!paramName) return PARAM_NOT_FOUND;
-	paramStatus result;
+	if (!paramName) return NULL;
 	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = g_NotifyParamList;
+	g_NotifyParam *temp = g_NotifyParamHead;
 	while(temp != NULL)
 	{
 		if(strcmp(temp->paramName,paramName) == 0)
 		{
-			if(temp->paramSubscriptionStatus == OFF)
-				result = PARAM_FOUND_OFF;
-			else
-				result = PARAM_FOUND_ON;
 			pthread_mutex_unlock(&g_NotifyParamMut);
-			return result;
+			return temp;
 		}
 		temp = temp->next;
 	}
 	pthread_mutex_unlock(&g_NotifyParamMut);
-	return PARAM_NOT_FOUND;
+	return NULL;
 }
 
-void freeGlobalNotifyList()
-{
-    pthread_mutex_lock(&g_NotifyParamMut);
-
-    g_NotifyParam* current = g_NotifyParamList;
-    while (current)
-    {
-        g_NotifyParam* next = current->next;
-
-        if (current->paramName)
-            free(current->paramName);
-
-        free(current);
-        current = next;
-    }
-
-    g_NotifyParamList = NULL;
-    g_NotifyParamTail = NULL;
-
-    pthread_mutex_unlock(&g_NotifyParamMut);
-}
-
-int writeDynamicParamToDBFile(char *param)
+int writeDynamicParamToDBFile(const char *param)
 {
 	FILE *fp;
 	fp = fopen(NOTIFY_PARAM_FILE , "a");
@@ -2362,7 +2351,7 @@ char* readDynamicParamsFromDBFile()
 	long file_size = 0;
 	size_t read_size = 0;
 	char *paramList = NULL;
-
+	
 	WalInfo("Dynamic parameters reading from DB\n");
 
 	if (access(NOTIFY_PARAM_FILE, F_OK) != 0)
@@ -2412,7 +2401,7 @@ char* CreateJsonFromGlobalNotifyList()
 {
 	char *paramList = NULL;
 	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = g_NotifyParamList;
+	g_NotifyParam *temp = g_NotifyParamHead;
 	cJSON *jsonArray = cJSON_CreateArray();
     while (temp != NULL) 
 	{
@@ -2428,6 +2417,6 @@ char* CreateJsonFromGlobalNotifyList()
 	pthread_mutex_unlock(&g_NotifyParamMut);
 	paramList = cJSON_PrintUnformatted(jsonArray);
 	cJSON_Delete(jsonArray);
-	return paramList;
+	return paramList;	
 }
 
