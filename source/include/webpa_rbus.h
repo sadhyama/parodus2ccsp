@@ -26,7 +26,7 @@ rbusError_t setTraceContext(char* traceContext[]);
 rbusError_t getTraceContext(char* traceContext[]);
 rbusError_t clearTraceContext();
 int regWebpaDataModel();
-int UnregWebpaDataModel();
+
 rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts);
 rbusError_t NotifyParamMethodHandler(rbusHandle_t handle, const char* methodName, rbusObject_t inParams, rbusObject_t outParams, rbusMethodAsyncHandle_t asyncHandle);
 #endif

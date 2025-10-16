@@ -206,13 +206,4 @@ void sendNotification(char *payload, char *source, char *destination);
 
 char* parsePayloadForStatus(char *payload);
 
-typedef enum {
-    PROCESS_STATUS_OK               = 200,
-    MULTI_STATUS                    = 207,
-    INVALID_INPUT                   = 400,
-    SUBSCRIPTION_ALREADY_EXIST      = 409,
-    PROCESS_STATUS_ERROR            = 500,
-    BOOTUP_IN_PROGRESS              = 503,
-    PROCESS_TIMEOUT                 = 504
-} HTTP_STATUS;
 #endif /* _WEBPA_ADAPTER_H_ */

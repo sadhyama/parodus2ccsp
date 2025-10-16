@@ -102,6 +102,15 @@ typedef struct
  */
 typedef void (*notifyCB)(NotifyData *notifyDataPtr);
 
+typedef enum {
+    NOTIFY_SUBSCRIPTION_SUCCESS                 =  200,
+    NOTIFY_SUBSCRIPTION_FAILURE                 =  500,
+    NOTIFY_SUBSCRIPTION_INVALID_INPUT           =  400,
+    NOTIFY_SUBSCRIPTION_ALREADY_EXISTS          =  409,
+    NOTIFY_SUBSCRIPTION_BOOTUP_IN_PROGRESS      =  503,
+    NOTIFY_SUBSCRIPTION_MULTI_STATUS            =  207
+} NOTIFY_SUBSCRIPTION_STATUS_CODE;
+
 /*----------------------------------------------------------------------------*/
 /*                             Function Prototypes                            */
 /*----------------------------------------------------------------------------*/

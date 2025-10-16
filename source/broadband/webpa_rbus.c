@@ -202,9 +202,10 @@ rbusError_t NotifyParamMethodHandler(
 
     WalPrint("NotifyParamMethodHandler invoked\n");
 
-    rbusValue_t message = NULL;
-    rbusValue_t statusCode = NULL;
+    rbusValue_t message, statusCode;
+    message = statusCode = NULL;
     WDMP_STATUS wret = WDMP_FAILURE;
+    NOTIFY_SUBSCRIPTION_STATUS_CODE notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
     int prop_count  = 0, failureCount = 0, successCount = 0;
 
     rbusValue_Init(&message);
@@ -212,13 +213,18 @@ rbusError_t NotifyParamMethodHandler(
 
     if(getInitialNotifyInProgress())
     {
+        notifyStatus = NOTIFY_SUBSCRIPTION_BOOTUP_IN_PROGRESS;
         WalInfo("Initial notification setup during bootup is in progress. Please retry later.\n");
         rbusValue_SetString(message, "Initial notification setup during bootup is in progress. Please retry later.");
-        rbusValue_SetInt32(statusCode, BOOTUP_IN_PROGRESS);
+        rbusValue_SetInt32(statusCode, notifyStatus);
         rbusObject_SetValue(outParams, "message", message);
         rbusObject_SetValue(outParams, "statusCode", statusCode);
         rbusValue_Release(message); rbusValue_Release(statusCode);
-        return RBUS_ERROR_ASYNC_RESPONSE;
+        return RBUS_ERROR_BUS_ERROR;
+    }
+    else
+    {
+        WalInfo("Bootup is completed\n");
     }
 
 /* Extract inParams */
@@ -227,16 +233,19 @@ rbusError_t NotifyParamMethodHandler(
 
     if (prop_count == 0)
     {
+        notifyStatus = NOTIFY_SUBSCRIPTION_INVALID_INPUT;
         WalError("No parameters provided\n");
         rbusValue_SetString(message, "No parameters provided");
-        rbusValue_SetInt32(statusCode, INVALID_INPUT);
+        rbusValue_SetInt32(statusCode, notifyStatus);
         rbusObject_SetValue(outParams, "message", message);
         rbusObject_SetValue(outParams, "statusCode", statusCode);
         rbusValue_Release(message); rbusValue_Release(statusCode);
         return RBUS_ERROR_INVALID_INPUT;
     }
 
-    size_t allocSize = (prop_count ? prop_count : 1) * 128;
+    WalInfo("No. of parameters received to be subscribed: %d\n", prop_count);
+
+    size_t allocSize = prop_count * 128;
     char *successBuf = calloc(1, allocSize);
     char *failedBuf  = calloc(1, allocSize);
     if (!successBuf || !failedBuf) {
@@ -244,6 +253,7 @@ rbusError_t NotifyParamMethodHandler(
         return RBUS_ERROR_BUS_ERROR;
     }
 
+    // Extracting inParams
     for (int i = 0; i < prop_count; i++)
     {
         char keyName[64];
@@ -276,9 +286,16 @@ rbusError_t NotifyParamMethodHandler(
             notifType = rbusValue_GetString(val, NULL);
 
         WalInfo("%s: name=%s, notificationType=%s\n", keyName, name ? name : "NULL", notifType ? notifType : "NULL");
-
-        if (!name || !*name) continue;
-        if (notifType == NULL || strcmp(notifType, "ValueChange") != 0) continue;
+        if (!name || !*name || !notifType || strcmp(notifType, "ValueChange") != 0)
+        {
+            WalError("Invalid or unsupported subscription entry: name='%s', notificationType='%s'\n", name ? name : "NULL", notifType ? notifType : "NULL");
+            if (failedBuf[0] != '\0') {
+                strncat(failedBuf, ", ", allocSize - strlen(failedBuf) - 1);
+            }
+            strncat(failedBuf, name, allocSize - strlen(failedBuf) - 1);
+            failureCount++;
+            continue;
+        }
 
         g_NotifyParam *node = searchParaminGlobalList(name);
         if(!node || node->paramSubscriptionStatus == OFF)
@@ -325,34 +342,42 @@ rbusError_t NotifyParamMethodHandler(
         else if(node->paramSubscriptionStatus == ON)
         {
             WalInfo("Parameter '%s' already exists in globallist. \n", name);
+            notifyStatus = NOTIFY_SUBSCRIPTION_ALREADY_EXISTS;
             continue;
         }
     }
 
-    size_t buffSize = snprintf(NULL, 0, "Success: %s Failed: %s", successBuf[0] ? successBuf : "None", failedBuf[0]  ? failedBuf  : "None") + 1;
+    size_t buffSize = snprintf(NULL, 0, "Success: %s, Failed: %s", successBuf[0] ? successBuf : "None", failedBuf[0]  ? failedBuf  : "None") + 1;
     char *buffer = malloc(buffSize);
     if (buffer) {
-        snprintf(buffer, buffSize, "Success: %s Failed: %s", successBuf[0] ? successBuf : "None", failedBuf[0]  ? failedBuf  : "None");
+        snprintf(buffer, buffSize, "Success: %s, Failed: %s", successBuf[0] ? successBuf : "None", failedBuf[0]  ? failedBuf  : "None");
         rbusValue_SetString(message, buffer);
         free(buffer);
     } else {
         rbusValue_SetString(message, "UNKNOWN");
     }
-
-    int http_resp_code;
-    if (failureCount == 0) http_resp_code = PROCESS_STATUS_OK;
-    else if (successCount == 0) http_resp_code = PROCESS_STATUS_ERROR;
-    else http_resp_code = MULTI_STATUS;
-    rbusValue_SetInt32(statusCode, http_resp_code);
-
     rbusObject_SetValue(outParams, "message", message);
+
+    if (failureCount == 0)
+        notifyStatus = NOTIFY_SUBSCRIPTION_SUCCESS;
+    else if(successCount == 0)
+        notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
+    else
+        notifyStatus = NOTIFY_SUBSCRIPTION_MULTI_STATUS;
+
+    rbusValue_SetInt32(statusCode, notifyStatus);
     rbusObject_SetValue(outParams, "statusCode", statusCode);
-    WalInfo("NotifyParamMethodHandler completed: %s\n", rbusValue_GetString(message, NULL));
+
+    WalInfo("NotifyParamMethodHandler completed: %s (status: %d)\n", rbusValue_GetString(message, NULL), rbusValue_GetInt32(statusCode));
     
     rbusValue_Release(message); rbusValue_Release(statusCode);
     if (successBuf) free(successBuf);
     if(failedBuf) free(failedBuf);
 
-    return RBUS_ERROR_SUCCESS;
+    if (notifyStatus == NOTIFY_SUBSCRIPTION_SUCCESS || notifyStatus == NOTIFY_SUBSCRIPTION_MULTI_STATUS) {
+        return RBUS_ERROR_SUCCESS;
+    }
+    else {
+        return RBUS_ERROR_BUS_ERROR;
+    }
 }
-
