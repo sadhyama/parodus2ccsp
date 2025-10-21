@@ -282,7 +282,7 @@ rbusError_t NotifyParamMethodHandler(
             notifType = rbusValue_GetString(val, NULL);
 
         WalInfo("%s: name=%s, notificationType=%s\n", keyName, name ? name : "NULL", notifType ? notifType : "NULL");
-        if (!name || !*name || !notifType || strcmp(notifType, "ValueChange") != 0)
+        if (!name || !*name || !notifType || strcmp(notifType, "ValueChange") != 0 || strncmp(name, "Device.", 7) == 0)
         {
             WalError("Invalid or unsupported subscription entry: name='%s', notificationType='%s'\n", name ? name : "NULL", notifType ? notifType : "NULL");
             if (failedBuf[0] != '\0') {

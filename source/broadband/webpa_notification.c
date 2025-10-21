@@ -817,12 +817,9 @@ static void setInitialNotify()
 			token = strtok(dynamic_param_list, ",");
 			while (token != NULL) 
 			{
-				if(token[0] != '\0' && strncmp(token, "Device.", 7) == 0)
-				{
-					WalInfo("Adding Dynamic param: %s into global list\n", token);
-					addParamToGlobalList(token,DYNAMIC_PARAM,OFF);
-					notifyListSize++;
-				}
+				WalInfo("Adding Dynamic param: %s into global list\n", token);
+				addParamToGlobalList(token,DYNAMIC_PARAM,OFF);
+				notifyListSize++;
 				token = strtok(NULL, ",");
 			}
 			WAL_FREE(dynamic_param_list);
@@ -2374,7 +2371,6 @@ char* readDynamicParamsFromDBFile()
 {
 	FILE *fp;
 	long file_size = 0;
-	size_t read_size = 0;
 	char *paramList = NULL;
 
 	if (access(NOTIFY_PARAM_FILE, F_OK) != 0)
@@ -2403,21 +2399,64 @@ char* readDynamicParamsFromDBFile()
 	}
 
     // Allocate memory to hold the entire file content
-    paramList = (char *)malloc(file_size + 1);
-    if (paramList == NULL)
-	{
-        WalError("Memory allocation failed while readDynamicParamsFromDBFile");
+	char *rawBuf = (char *)malloc(file_size + 1);
+    if (!rawBuf)
+    {
+        WalError("Memory allocation failed while reading DB file\n");
         fclose(fp);
         return NULL;
     }
 
     // Read entire file into paramList
-    read_size = fread(paramList, 1, file_size, fp);
-    paramList[read_size] = '\0';
-	fclose(fp);
+    size_t read_size = fread(rawBuf, 1, file_size, fp);
+    rawBuf[read_size] = '\0';
+    fclose(fp);
 
-	WalInfo("Successfully read %zu bytes from %s\n", read_size, NOTIFY_PARAM_FILE);
-	return paramList;
+	char *cleanBuf = (char *)calloc(read_size + 1, 1);
+	if (!cleanBuf)
+    {
+        WalError("Memory allocation failed for clean buffer\n");
+        free(rawBuf);
+        return NULL;
+    }
+
+	size_t cleanSize = 0;
+    char *token = strtok(rawBuf, ",");
+    while (token)
+    {
+        while (isspace((unsigned char)*token)) token++;
+        if (*token != '\0')
+        {
+            char *end = token + strlen(token) - 1;
+            while (end > token && isspace((unsigned char)*end)) end--;
+            end[1] = '\0';
+        }
+        if (*token != '\0' && strncmp(token, "Device.", 7) == 0)
+        {
+            if (cleanSize > 0)
+                cleanBuf[cleanSize++] = ',';
+
+            size_t len = strlen(token);
+            memcpy(cleanBuf + cleanSize, token, len);
+            cleanSize += len;
+            cleanBuf[cleanSize] = '\0';
+        }
+        else if (*token != '\0')
+        {
+            WalError("Skipping malformed token in DB file: '%s'\n", token);
+        }
+        token = strtok(NULL, ",");
+    }
+
+    free(rawBuf);
+    if (cleanSize == 0)
+    {
+        free(cleanBuf);
+        return NULL;
+    }
+
+	WalInfo("Successfully read %zu bytes from %s\n", cleanSize, NOTIFY_PARAM_FILE);
+	return cleanBuf;
 }
 
 
