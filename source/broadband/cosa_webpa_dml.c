@@ -741,6 +741,11 @@ int getWebpaParameterValues(char **parameterNames, int paramCount, int *val_size
                             if(paramList != NULL && strlen(paramList) > 0)
                             {
                                 paramVal[k]->parameterValue = strdup(paramList);
+                                if (paramVal[k]->parameterValue == NULL)
+                                {
+                                    WalError("Failed to allocate memory for parameterValue for NotifyParameters request\n");
+                                }
+                                WalPrint("Global notify param list is %s\n",paramVal[k]->parameterValue);
                             }
                             else
                             {

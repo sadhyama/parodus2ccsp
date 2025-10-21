@@ -239,7 +239,7 @@ const char * notifyparameters[]={
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.Softflowd.Enable"
 };
 
-bool initialNotifyInProgress = false;
+bool bootupNotifyInProgress = false;
 /*----------------------------------------------------------------------------*/
 /*                             Function Prototypes                            */
 /*----------------------------------------------------------------------------*/
@@ -790,7 +790,7 @@ static void setInitialNotify()
 	//Retry Backoff count will start at c=2 & calculate 2^c - 1.
 	int c = 2;
 	
-	max_retry_sleep = (1 << backoff_max_time) - 1;  // 2^backoff_max_time - 1 and no need of casting to int
+	max_retry_sleep = (1 << backoff_max_time) - 1;
         WalInfo("setInitialNotify max_retry_sleep is %d\n", max_retry_sleep );
 
 	getNotifyParamList(&notifyparameters, &notifyListSize);
@@ -824,18 +824,14 @@ static void setInitialNotify()
 			}
 			WAL_FREE(dynamic_param_list);
 		}
-		else
-		{
-			WalInfo("Failed to read dynamic params from DB file\n");
-		}
 
 		// Set flag to true for initial notification
-		setInitialNotifyInProgress(true);
+		setBotupNotifyInProgress(true);
 		do
 		{
 			if(backoffRetryTime < max_retry_sleep)
                 	{
-				backoffRetryTime = (1 << c) - 1; // 2^c - 1
+				backoffRetryTime = (1 << c) - 1;
 			}
 			
 			WalPrint("setInitialNotify backoffRetryTime calculated as %d seconds\n", backoffRetryTime);
@@ -843,7 +839,7 @@ static void setInitialNotify()
 			isError = 0;
 			WalPrint("notify List Size: %d\n", notifyListSize);
 			attArr = (param_t *) malloc(sizeof(param_t));
-			currentParam = g_NotifyParamHead;
+			currentParam = getGlobalNotifyHead();
 			for (i = 0; currentParam && (i < notifyListSize); i++)
 			{
 				if (currentParam->paramSubscriptionStatus == OFF)
@@ -872,6 +868,9 @@ static void setInitialNotify()
 				}
 				currentParam = currentParam->next;
 			}
+			// Clear the flag for accepting cloud requests
+			setBotupNotifyInProgress(false);
+			WalInfo("\n bootupNotifyInProgress flag is cleared. Cloud requests now allowed.\n");
 			WAL_FREE(attArr);
 
 			if (isError == 0)
@@ -897,10 +896,6 @@ static void setInitialNotify()
                         }
 
 		} while (retry++ < WEBPA_SET_INITIAL_NOTIFY_RETRY_COUNT);
-
-		// Clear the flag for accepting cloud requests
-		setInitialNotifyInProgress(false);
-		WalInfo("\n initialNotifyInProgress flag is cleared. Cloud requests now allowed.\n");
 
 		WalPrint("**********************End of setInitial Notify************************\n");
 	}
@@ -2258,14 +2253,22 @@ int write_sync_notify_into_file(char *buff)
     return 0;
 }
 
-bool getInitialNotifyInProgress()
+bool getBootupNotifyInProgress()
 {
-    return initialNotifyInProgress;
+    return bootupNotifyInProgress;
 }
 
-void setInitialNotifyInProgress(bool value)
+void setBotupNotifyInProgress(bool value)
 {
-   initialNotifyInProgress  = value;
+   bootupNotifyInProgress  = value;
+}
+
+g_NotifyParam* getGlobalNotifyHead()
+{
+	pthread_mutex_lock(&g_NotifyParamMut);
+	g_NotifyParam *head = g_NotifyParamHead;
+	pthread_mutex_unlock(&g_NotifyParamMut);
+	return head;
 }
 
 void addParamToGlobalList(const char *paramName,bool paramType, bool paramSubscriptionStatus)
@@ -2308,7 +2311,7 @@ g_NotifyParam* searchParaminGlobalList(const char *paramName)
 {
 	if (!paramName) return NULL;
 	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = g_NotifyParamHead;
+	g_NotifyParam *temp = getGlobalNotifyHead();
 	while(temp != NULL)
 	{
 		if(strcmp(temp->paramName,paramName) == 0)
@@ -2320,6 +2323,29 @@ g_NotifyParam* searchParaminGlobalList(const char *paramName)
 	}
 	pthread_mutex_unlock(&g_NotifyParamMut);
 	return NULL;
+}
+
+char* CreateJsonFromGlobalNotifyList()
+{
+	char *paramList = NULL;
+	pthread_mutex_lock(&g_NotifyParamMut);
+	g_NotifyParam *temp = getGlobalNotifyHead();
+	cJSON *jsonArray = cJSON_CreateArray();
+    while (temp != NULL)
+	{
+        cJSON *item = cJSON_CreateObject();
+
+        cJSON_AddStringToObject(item, "ParamName", temp->paramName);
+        cJSON_AddStringToObject(item, "Type", temp->paramType?"Static":"Dynamic");
+        cJSON_AddStringToObject(item, "Status", temp->paramSubscriptionStatus?"ON":"OFF");
+
+        cJSON_AddItemToArray(jsonArray, item);
+        temp = temp->next;
+    }
+	pthread_mutex_unlock(&g_NotifyParamMut);
+	paramList = cJSON_PrintUnformatted(jsonArray);
+	cJSON_Delete(jsonArray);
+	return paramList;
 }
 
 int writeDynamicParamToDBFile(const char *param)
@@ -2351,8 +2377,6 @@ char* readDynamicParamsFromDBFile()
 	long file_size = 0;
 	size_t read_size = 0;
 	char *paramList = NULL;
-	
-	WalInfo("Dynamic parameters reading from DB\n");
 
 	if (access(NOTIFY_PARAM_FILE, F_OK) != 0)
 	{
@@ -2397,26 +2421,4 @@ char* readDynamicParamsFromDBFile()
 	return paramList;
 }
 
-char* CreateJsonFromGlobalNotifyList()
-{
-	char *paramList = NULL;
-	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = g_NotifyParamHead;
-	cJSON *jsonArray = cJSON_CreateArray();
-    while (temp != NULL) 
-	{
-        cJSON *item = cJSON_CreateObject();
-
-        cJSON_AddStringToObject(item, "ParamName", temp->paramName);
-        cJSON_AddStringToObject(item, "Type", temp->paramType?"Static":"Dynamic");
-        cJSON_AddStringToObject(item, "Status", temp->paramSubscriptionStatus?"ON":"OFF");
-
-        cJSON_AddItemToArray(jsonArray, item);
-        temp = temp->next;
-    }
-	pthread_mutex_unlock(&g_NotifyParamMut);
-	paramList = cJSON_PrintUnformatted(jsonArray);
-	cJSON_Delete(jsonArray);
-	return paramList;	
-}
 

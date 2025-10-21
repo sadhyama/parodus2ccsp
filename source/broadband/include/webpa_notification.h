@@ -155,11 +155,12 @@ void FR_CloudSyncCheck();
 int read_sync_notify_from_file();
 int write_sync_notify_into_file(char *buff);
 
+g_NotifyParam* getGlobalNotifyHead();
+void addParamToGlobalList(const char* paramName, bool paramType, bool paramSubscriptionStatus);
+g_NotifyParam* searchParaminGlobalList(const char *paramName);
+char* CreateJsonFromGlobalNotifyList();
 char* readDynamicParamsFromDBFile();
 int writeDynamicParamToDBFile(const char *param);
-g_NotifyParam* searchParaminGlobalList(const char *paramName);
-void addParamToGlobalList(const char* paramName, bool paramType, bool paramSubscriptionStatus);
-char* CreateJsonFromGlobalNotifyList();
-void setInitialNotifyInProgress(bool value);
-bool getInitialNotifyInProgress();
+void setBotupNotifyInProgress(bool value);
+bool getBootupNotifyInProgress();
 #endif
