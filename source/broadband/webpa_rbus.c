@@ -161,7 +161,7 @@ rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, 
 {
     (void)handle;
     (void)opts;
-    WalPrint("NotifyParamGetHandler is called\n");
+    WalInfo("NotifyParamGetHandler is called\n");
     const char* paramName = NULL;
 
     paramName = rbusProperty_GetName(property);

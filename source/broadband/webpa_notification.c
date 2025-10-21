@@ -817,9 +817,12 @@ static void setInitialNotify()
 			token = strtok(dynamic_param_list, ",");
 			while (token != NULL) 
 			{
-				WalInfo("Adding Dynamic param: %s into global list\n", token);
-				addParamToGlobalList(token,DYNAMIC_PARAM,OFF);
-				notifyListSize++;
+				if(token[0] != '\0' && strncmp(token, "Device.", 7) == 0)
+				{
+					WalInfo("Adding Dynamic param: %s into global list\n", token);
+					addParamToGlobalList(token,DYNAMIC_PARAM,OFF);
+					notifyListSize++;
+				}
 				token = strtok(NULL, ",");
 			}
 			WAL_FREE(dynamic_param_list);
@@ -839,7 +842,7 @@ static void setInitialNotify()
 			isError = 0;
 			WalPrint("notify List Size: %d\n", notifyListSize);
 			attArr = (param_t *) malloc(sizeof(param_t));
-			currentParam = getGlobalNotifyHead();
+			currentParam = g_NotifyParamHead;
 			for (i = 0; currentParam && (i < notifyListSize); i++)
 			{
 				if (currentParam->paramSubscriptionStatus == OFF)
@@ -2263,14 +2266,6 @@ void setBotupNotifyInProgress(bool value)
    bootupNotifyInProgress  = value;
 }
 
-g_NotifyParam* getGlobalNotifyHead()
-{
-	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *head = g_NotifyParamHead;
-	pthread_mutex_unlock(&g_NotifyParamMut);
-	return head;
-}
-
 void addParamToGlobalList(const char *paramName,bool paramType, bool paramSubscriptionStatus)
 {
 	if (!paramName)
@@ -2311,7 +2306,7 @@ g_NotifyParam* searchParaminGlobalList(const char *paramName)
 {
 	if (!paramName) return NULL;
 	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = getGlobalNotifyHead();
+	g_NotifyParam *temp = g_NotifyParamHead;
 	while(temp != NULL)
 	{
 		if(strcmp(temp->paramName,paramName) == 0)
@@ -2328,13 +2323,17 @@ g_NotifyParam* searchParaminGlobalList(const char *paramName)
 char* CreateJsonFromGlobalNotifyList()
 {
 	char *paramList = NULL;
-	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = getGlobalNotifyHead();
 	cJSON *jsonArray = cJSON_CreateArray();
+	if (!jsonArray)
+	{
+		return NULL;
+	}
+
+	pthread_mutex_lock(&g_NotifyParamMut);
+	g_NotifyParam *temp = g_NotifyParamHead;
     while (temp != NULL)
 	{
         cJSON *item = cJSON_CreateObject();
-
         cJSON_AddStringToObject(item, "ParamName", temp->paramName);
         cJSON_AddStringToObject(item, "Type", temp->paramType?"Static":"Dynamic");
         cJSON_AddStringToObject(item, "Status", temp->paramSubscriptionStatus?"ON":"OFF");

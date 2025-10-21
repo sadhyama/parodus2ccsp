@@ -155,7 +155,6 @@ void FR_CloudSyncCheck();
 int read_sync_notify_from_file();
 int write_sync_notify_into_file(char *buff);
 
-g_NotifyParam* getGlobalNotifyHead();
 void addParamToGlobalList(const char* paramName, bool paramType, bool paramSubscriptionStatus);
 g_NotifyParam* searchParaminGlobalList(const char *paramName);
 char* CreateJsonFromGlobalNotifyList();
