@@ -24,7 +24,7 @@
     #define WEBPA_CFG_FILE                      "/tmp/webpa_cfg.json"
 #endif
 #define SYNC_NOTIFY_PARAM_BACKUP_FILE "/tmp/webpa_sync_notification.json"
-#define NOTIFY_PARAM_FILE "/nvram/webpa_notify_param"
+#define NOTIFY_PARAM_FILE "/nvram/webpa_dynamic_notify_params.txt"
 /*----------------------------------------------------------------------------*/
 /*                               Data Structures                              */
 /*----------------------------------------------------------------------------*/

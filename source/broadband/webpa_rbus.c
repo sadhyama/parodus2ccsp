@@ -157,6 +157,62 @@ void regWebpaDataModel()
 	return;
 }
 
+static void appendFailure(char *buf, size_t *len, size_t capacity, const char *param, const char *failure_reason)
+{
+    if (!buf || !len || *len >= capacity) return;
+
+    size_t rem = capacity - *len;
+    int n;
+
+    if (*len == 0)
+        n = snprintf(buf + *len, rem, "%s:%s", param, failure_reason);
+    else
+        n = snprintf(buf + *len, rem, ", %s:%s", param, failure_reason);
+
+    if (n < 0)
+    {
+        WalError("snprintf encoding error while appending failure\n");
+    }
+    else if ((size_t)n >= rem)
+    {
+        WalError("failure buffer truncated while appending '%s:%s'\n", param, failure_reason);
+        *len = capacity - 1;
+        buf[*len] = '\0';
+    }
+    else
+    {
+        *len += (size_t)n;
+    }
+}
+
+static void appendSuccess(char *buf, size_t *len, size_t capacity, const char *param)
+{
+    if (!buf || !len || *len >= capacity) return;
+
+    size_t rem = capacity - *len;
+    int n;
+
+    if (*len == 0)
+        n = snprintf(buf + *len, rem, "%s", param);
+    else
+        n = snprintf(buf + *len, rem, ", %s", param);
+
+    if (n < 0)
+    {
+        WalError("snprintf encoding error while appending success\n");
+    }
+    else if ((size_t)n >= rem)
+    {
+        WalError("successBuf truncated while appending '%s'\n", param);
+        *len = capacity - 1;
+        buf[*len] = '\0';
+    }
+    else
+    {
+        *len += (size_t)n;
+    }
+}
+
 rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
 {
     (void)handle;
@@ -199,8 +255,6 @@ rbusError_t NotifyParamMethodHandler(
     (void)methodName;
     (void)asyncHandle;
 
-    WalPrint("NotifyParamMethodHandler invoked\n");
-
     rbusValue_t message, statusCode;
     message = statusCode = NULL;
     WDMP_STATUS wret = WDMP_FAILURE;
@@ -221,7 +275,6 @@ rbusError_t NotifyParamMethodHandler(
         rbusValue_Release(message); rbusValue_Release(statusCode);
         return RBUS_ERROR_BUS_ERROR;
     }
-    WalInfo("Bootup is completed. Proceeding with dynamic subscribptions.\n");
 
 /* Extract inParams */
     rbusProperty_t props = rbusObject_GetProperties(inParams);
@@ -239,7 +292,7 @@ rbusError_t NotifyParamMethodHandler(
         return RBUS_ERROR_INVALID_INPUT;
     }
 
-    WalInfo("No. of parameters received to be subscribed: %d\n", prop_count);
+    WalInfo("No. of parameters received to subscribe: %d\n", prop_count);
 
     size_t allocSize = prop_count * 128;
     char *successBuf = calloc(1, allocSize);
@@ -262,7 +315,7 @@ rbusError_t NotifyParamMethodHandler(
         rbusValue_t paramVal = rbusObject_GetValue(inParams, keyName);
         if (!paramVal || rbusValue_GetType(paramVal) != RBUS_OBJECT)
         {
-            WalError("Missing/Invalid object structure for %s\n", keyName);
+            WalError("Missing or invalid object structure for %s\n", keyName);
             continue;
         }
         rbusObject_t subObj = rbusValue_GetObject(paramVal);
@@ -275,6 +328,7 @@ rbusError_t NotifyParamMethodHandler(
         rbusValue_t val = NULL;
         const char* name = NULL;
         const char* notifType = NULL;
+        const char *failure_reason = NULL;
 
         val = rbusObject_GetValue(subObj, "name");
         if (val && rbusValue_GetType(val) == RBUS_STRING)
@@ -285,120 +339,87 @@ rbusError_t NotifyParamMethodHandler(
             notifType = rbusValue_GetString(val, NULL);
 
         WalInfo("%s: name=%s, notificationType=%s\n", keyName, name ? name : "NULL", notifType ? notifType : "NULL");
-        if (!name || !*name || !notifType || strcmp(notifType, "ValueChange") != 0)
+        if (!name || !*name)
         {
-            WalError("Invalid or unsupported subscription entry: name='%s', notificationType='%s'\n", name ? name : "NULL", notifType ? notifType : "NULL");
-            const char *pname = (name && *name) ? name : "NULL";
-            const char *reason = !name || !*name ? "INVALID_PARAMETER" : !notifType ? "INVALID_NOTIFICATION_TYPE" : "UNSUPPORTED_NOTIFICATION_TYPE";
-            int n;
-            size_t rem = allocSize - failedLen;
-
-            if (failedLen == 0)
-                n = snprintf(failedBuf + failedLen, rem, "%s:%s", pname, reason);
-            else
-                n = snprintf(failedBuf + failedLen, rem, ", %s:%s", pname, reason);
-            
-            if (n > 0 && (size_t)n < rem)
-                failedLen += (size_t)n;
-            else
-                failedLen = allocSize - 1;
-
-            invalidCount++;
-            failureCount++;
+            WalError("Invalid parameter name\n");
+            failure_reason = "Invalid Parameter Name";
+            appendFailure(failedBuf, &failedLen, allocSize, "NULL", failure_reason);
+            invalidCount++; failureCount++;
+            continue;
+        }
+        if (!notifType || !*notifType)
+        {
+            WalError("Invalid notification type\n");
+            failure_reason = "Invalid notification type";
+            appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
+            invalidCount++; failureCount++;
             continue;
         }
 
-        g_NotifyParam *node = searchParaminGlobalList(name);
-        if(!node || node->paramSubscriptionStatus == OFF)
+        if (strcmp(notifType, "ValueChange") == 0)
         {
-            att.name = strdup(name);
-            att.value = strdup("1");
-            att.type = WDMP_INT;
-            setAttributes(&att, 1, NULL, &wret);
-            if (wret == WDMP_SUCCESS)
+            g_NotifyParam *node = searchParaminGlobalList(name);
+            if(!node || node->paramSubscriptionStatus == OFF)
             {
-                if (!node)
+                att.name = strdup(name);
+                att.value = strdup("1");
+                att.type = WDMP_INT;
+                setAttributes(&att, 1, NULL, &wret);
+                if (wret == WDMP_SUCCESS)
                 {
-                    WalInfo("parameter: %s is not found in the globallist. Adding.\n", name);
-                    addParamToGlobalList(att.name, DYNAMIC_PARAM, ON);
+                    if (!node)
+                    {
+                        WalInfo("parameter: %s is not subscribed already. Adding.\n", name);
+                        addParamToGlobalList(att.name, DYNAMIC_PARAM, ON);
+                    }
+                    else
+                    {
+                        WalInfo("parameter: %s is found. Turning on.\n", name);
+                        pthread_mutex_lock(&g_NotifyParamMut);
+                        node->paramSubscriptionStatus = ON;
+                        pthread_mutex_unlock(&g_NotifyParamMut);
+                    }
+
+                    WalInfo("Successfully set notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
+                    appendSuccess(successBuf, &successLen, allocSize, name);
+                    successCount++;
+                    if (!writeDynamicParamToDBFile(name))
+                    {
+                        WalError("Write to DB file failed for '%s'\n", name);
+                    }
                 }
                 else
                 {
-                    WalInfo("parameter: %s is found in the globallist. Turning on.\n", name);
-                    pthread_mutex_lock(&g_NotifyParamMut);
-                    node->paramSubscriptionStatus = ON;
-                    pthread_mutex_unlock(&g_NotifyParamMut);
+                    WalError("Failed to turn notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
+                    failure_reason = "set attributes failed";
+                    appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
                 }
-
-                WalInfo("Successfully set notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
-                int n;
-                size_t rem = allocSize - successLen;
-
-                if (successLen == 0)
-                    n = snprintf(successBuf + successLen, rem, "%s", att.name);
-                else
-                    n = snprintf(successBuf + successLen, rem, ", %s", att.name);
-
-                if (n > 0 && (size_t)n < rem) {
-                    successLen += (size_t)n;
-                } else {
-                    successLen = allocSize - 1;
-                    successBuf[successLen] = '\0';
-                }
-
-                successCount++;
-                if (!writeDynamicParamToDBFile(name))
-                {
-                    WalError("Write to DB file failed for '%s'\n", name);
-                }
-
+                WAL_FREE(att.name);
+                WAL_FREE(att.value);
             }
-            else
+            else if(node->paramSubscriptionStatus == ON)
             {
-                WalError("Failed to turn notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
-                const char *reason = "SET_ATTRIBUTES_FAILURE";
-                int n;
-                size_t rem = allocSize - failedLen;
-
-                if (failedLen == 0)
-                    n = snprintf(failedBuf + failedLen, rem, "%s:%s", name, reason);
-                else
-                    n = snprintf(failedBuf + failedLen, rem, ", %s:%s", name, reason);
-                    
-                if (n > 0 && (size_t)n < rem)
-                    failedLen += (size_t)n;
-                else
-                    failedLen = allocSize - 1;
-                    failureCount++;
-                }
-            WAL_FREE(att.name);
-            WAL_FREE(att.value);
+                WalInfo("Parameter '%s' already exists in globallist. \n", name);
+                failure_reason = "Subscription already exists";
+                appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
+                failureCount++;
+                alreadySubscribedCount++;
+                continue;
+            }
         }
-        else if(node->paramSubscriptionStatus == ON)
+        else
         {
-            WalInfo("Parameter '%s' already exists in globallist. \n", name);
-            const char *reason = "SUBSCRIPTION_ALREADY_EXISTS";
-            int n;
-            size_t rem = allocSize - failedLen;
-
-            if (failedLen == 0)
-                n = snprintf(failedBuf + failedLen, rem, "%s:%s", name, reason);
-            else
-                n = snprintf(failedBuf + failedLen, rem, ", %s:%s", name, reason);
-                
-            if (n > 0 && (size_t)n < rem)
-                failedLen += (size_t)n;
-            else
-                failedLen = allocSize - 1;
-            failureCount++;
-            alreadySubscribedCount++;
+            WalError("Unsupported notification type: %s\n", notifType);
+            failure_reason = "Unsupported notification type";
+            appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
+            failureCount++; invalidCount++;
             continue;
         }
     }
 
     if (failureCount == 0)
     {
-        rbusValue_SetString(message, "Successful");
+        rbusValue_SetString(message, "Success");
         notifyStatus = NOTIFY_SUBSCRIPTION_SUCCESS;
     }
     else if (successCount == 0)
@@ -415,17 +436,17 @@ rbusError_t NotifyParamMethodHandler(
         }
         else
         {
-            rbusValue_SetString(message, "Failed");
+            rbusValue_SetString(message, "Failure");
             notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
         }
     }
     else
     {
-        size_t buffSize = snprintf(NULL, 0, "Success (%s), Failed (%s)", successBuf[0] ? successBuf : "None", failedBuf[0] ? failedBuf : "None") + 1;
+        size_t buffSize = snprintf(NULL, 0, "Success [%s], Failed [%s]", successBuf[0] ? successBuf : "None", failedBuf[0] ? failedBuf : "None") + 1;
         char *buffer = malloc(buffSize);
         if(buffer)
         {
-            snprintf(buffer, buffSize, "Success (%s), Failed (%s)", successBuf[0] ? successBuf : "None", failedBuf[0] ? failedBuf : "None");
+            snprintf(buffer, buffSize, "Success [%s], Failed [%s]", successBuf[0] ? successBuf : "None", failedBuf[0] ? failedBuf : "None");
             rbusValue_SetString(message, buffer);
             free(buffer);
         } else {
@@ -437,13 +458,14 @@ rbusError_t NotifyParamMethodHandler(
     rbusObject_SetValue(outParams, "message", message);
     rbusObject_SetValue(outParams, "statusCode", statusCode);
 
-    WalInfo("Subscriptions completed: %s (status: %d)\n", rbusValue_GetString(message, NULL), rbusValue_GetInt32(statusCode));
+    WalInfo("NotifyParamMethodHandler completed: %s (Status: %d)\n", rbusValue_GetString(message, NULL), rbusValue_GetInt32(statusCode));
     
     rbusValue_Release(message); rbusValue_Release(statusCode);
     if (successBuf) free(successBuf);
     if(failedBuf) free(failedBuf);
 
-    if (notifyStatus == NOTIFY_SUBSCRIPTION_SUCCESS || notifyStatus == NOTIFY_SUBSCRIPTION_MULTI_STATUS) {
+    if (notifyStatus == NOTIFY_SUBSCRIPTION_SUCCESS || notifyStatus == NOTIFY_SUBSCRIPTION_MULTI_STATUS)
+    {
         return RBUS_ERROR_SUCCESS;
     }
     else if (notifyStatus == NOTIFY_SUBSCRIPTION_INVALID_INPUT)
