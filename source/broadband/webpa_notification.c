@@ -802,35 +802,41 @@ static void setInitialNotify()
 		WDMP_STATUS ret = WDMP_FAILURE;
 		param_t *attArr = NULL;
 
+		// Adding static params to global param list
 		for (i = 0; i < notifyListSize; i++)
 		{
-			//Adding static params to global param list
 			addParamToGlobalList(notifyparameters[i],STATIC_PARAM,OFF);
 		}
 
-		//Adding dynamic params into global param list
-		dynamic_param_list = readDynamicParamsFromDBFile();
-		if(dynamic_param_list != NULL)
+		// Adding dynamic params to global param list
+		FILE *fp = fopen(NOTIFY_PARAM_FILE, "r");
+		if (fp == NULL)
 		{
-			WalInfo("Dynamic params read from DB file successfully: %s\n",dynamic_param_list);
-			char *token;
-			token = strtok(dynamic_param_list, ",");
-			while (token != NULL) 
+			int err = errno;
+			if (err == ENOENT)
+				WalInfo("Dynamic params are not available for this device\n");
+			else
+				WalError("Failed to open %s. errno: %d (%s)\n", NOTIFY_PARAM_FILE, err, strerror(err));
+		}
+		else
+		{
+			char param[512] = {'\0'};
+			while (fscanf(fp,"%511s", param) != EOF)
 			{
-				WalInfo("Adding Dynamic param: %s into global list\n", token);
-				addParamToGlobalList(token,DYNAMIC_PARAM,OFF);
+				addParamToGlobalList(param,DYNAMIC_PARAM,OFF);
 				notifyListSize++;
-				token = strtok(NULL, ",");
 			}
-			WAL_FREE(dynamic_param_list);
+			fclose(fp);
 		}
 
-		// Set flag to true for initial notification
-		setBotupNotifyInProgress(true);
 		do
 		{
+
+			// Set flag to true for initial notification
+			setBootupNotifyInProgress(true);
+
 			if(backoffRetryTime < max_retry_sleep)
-                	{
+			{
 				backoffRetryTime = (1 << c) - 1;
 			}
 			
@@ -844,12 +850,10 @@ static void setInitialNotify()
 			{
 				if (currentParam->paramSubscriptionStatus == OFF)
 				{
-					snprintf(notif, sizeof(notif), "%d", 1);
-					attArr[0].value = (char *) malloc(sizeof(char) * 20);
-					walStrncpy(attArr[0].value, notif, 20);
+					attArr[0].value = strdup("1");
 					attArr[0].name = strdup(currentParam->paramName);
 					attArr[0].type = WDMP_INT;
-					WalPrint("notifyparameters[%d]: %s\n", i,currentParam->paramName);
+					WalPrint("g_NotifyParam[%d]: %s\n", i,currentParam->paramName);
 					setAttributes(attArr, 1, NULL, &ret);
 					if (ret != WDMP_SUCCESS)
 					{
@@ -868,10 +872,10 @@ static void setInitialNotify()
 				}
 				currentParam = currentParam->next;
 			}
-			// Clear the flag for accepting cloud requests
-			setBotupNotifyInProgress(false);
-			WalInfo("\n bootupNotifyInProgress flag is cleared. Cloud requests now allowed.\n");
 			WAL_FREE(attArr);
+			// Clear the flag for accepting cloud requests
+			setBootupNotifyInProgress(false);
+			WalInfo("\n bootupNotifyInProgress flag is cleared. Cloud requests now allowed.\n");
 
 			if (isError == 0)
 			{
@@ -2258,7 +2262,7 @@ bool getBootupNotifyInProgress()
     return bootupNotifyInProgress;
 }
 
-void setBotupNotifyInProgress(bool value)
+void setBootupNotifyInProgress(bool value)
 {
    bootupNotifyInProgress  = value;
 }
@@ -2346,25 +2350,32 @@ char* CreateJsonFromGlobalNotifyList()
 
 int writeDynamicParamToDBFile(const char *param)
 {
-	FILE *fp;
-	fp = fopen(NOTIFY_PARAM_FILE , "a");
+	if (!param)
+	{
+        WalError("writeDynamicParamToDBFile failed: param is NULL\n");
+        return 0;
+    }
+
+	FILE *fp = fopen(NOTIFY_PARAM_FILE , "a");
 	if (fp == NULL)
 	{
 		WalError("Failed to open file for write %s\n", NOTIFY_PARAM_FILE);
 		return 0;
 	}
-	if(param !=NULL)
+
+	fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+
+	if (file_size > 0)
 	{
-		fprintf(fp,"%s,",param);
-		fclose(fp);
-		return 1;
+		fprintf(fp, "\n%s", param);
 	}
 	else
 	{
-		WalError("writeToDBFile failed, param is NULL\n");
-		fclose(fp);
-		return 0;
+		fprintf(fp, "%s", param);
 	}
+	fclose(fp);
+	return 1;
 }
 
 char* readDynamicParamsFromDBFile()

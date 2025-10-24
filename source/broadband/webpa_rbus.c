@@ -341,16 +341,16 @@ rbusError_t NotifyParamMethodHandler(
         WalInfo("%s: name=%s, notificationType=%s\n", keyName, name ? name : "NULL", notifType ? notifType : "NULL");
         if (!name || !*name)
         {
-            WalError("Invalid parameter name\n");
-            failure_reason = "Invalid Parameter Name";
+            WalError("Parameter name is Empty/NULL\n");
+            failure_reason = "Parameter name is Empty/NULL ";
             appendFailure(failedBuf, &failedLen, allocSize, "NULL", failure_reason);
             invalidCount++; failureCount++;
             continue;
         }
         if (!notifType || !*notifType)
         {
-            WalError("Invalid notification type\n");
-            failure_reason = "Invalid notification type";
+            WalError("Notification type is Empty/NULL\n");
+            failure_reason = "Notification type is Empty/NULL";
             appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
             invalidCount++; failureCount++;
             continue;
@@ -387,19 +387,24 @@ rbusError_t NotifyParamMethodHandler(
                     {
                         WalError("Write to DB file failed for '%s'\n", name);
                     }
+                    else
+                    {
+                        WalInfo("Added %s to Dynamic Notify DB File\n", att.name);
+                    }
                 }
                 else
                 {
                     WalError("Failed to turn notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
                     failure_reason = "set attributes failed";
                     appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
+                    failureCount++;
                 }
                 WAL_FREE(att.name);
                 WAL_FREE(att.value);
             }
             else if(node->paramSubscriptionStatus == ON)
             {
-                WalInfo("Parameter '%s' already exists in globallist. \n", name);
+                WalInfo("Parameter '%s' is already subscribed. \n", name);
                 failure_reason = "Subscription already exists";
                 appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
                 failureCount++;
@@ -431,7 +436,7 @@ rbusError_t NotifyParamMethodHandler(
         }
         else if(invalidCount > 0 && invalidCount ==  failureCount)
         {
-            rbusValue_SetString(message, "Invalid Parameters");
+            rbusValue_SetString(message, "Unsupported parameter name/type");
             notifyStatus = NOTIFY_SUBSCRIPTION_INVALID_INPUT;
         }
         else
@@ -464,15 +469,5 @@ rbusError_t NotifyParamMethodHandler(
     if (successBuf) free(successBuf);
     if(failedBuf) free(failedBuf);
 
-    if (notifyStatus == NOTIFY_SUBSCRIPTION_SUCCESS || notifyStatus == NOTIFY_SUBSCRIPTION_MULTI_STATUS)
-    {
-        return RBUS_ERROR_SUCCESS;
-    }
-    else if (notifyStatus == NOTIFY_SUBSCRIPTION_INVALID_INPUT)
-    {
-        return RBUS_ERROR_INVALID_INPUT;
-    }
-    else {
-        return RBUS_ERROR_BUS_ERROR;
-    }
+    return RBUS_ERROR_SUCCESS;
 }
