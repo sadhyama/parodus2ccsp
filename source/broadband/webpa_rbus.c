@@ -207,7 +207,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
     rbusValue_Init(&statusCode);
 
     /* Reject subscription while device bootup */
-    if(getBootupNotifyInitDone())
+    if(!getBootupNotifyInitDone())
     {
         notifyStatus = NOTIFY_SUBSCRIPTION_BOOTUP_IN_PROGRESS;
         WalInfo("Notification setup during Bootup is in Progress\n");
@@ -316,6 +316,10 @@ rbusError_t NotifySubscriptionListMethodHandler(
                     {
                         WalInfo("parameter: %s is not subscribed already. Adding.\n", name);
                         addParamToGlobalList(att.name, DYNAMIC_PARAM, ON);
+                        if (writeDynamicParamToDBFile(name))
+                            WalInfo("Added %s to Dynamic Notify DB File\n", att.name);
+                        else
+                            WalError("Write to DB file failed for '%s'\n", name);
                     }
                     else
                     {
@@ -328,11 +332,6 @@ rbusError_t NotifySubscriptionListMethodHandler(
                     WalInfo("Successfully set notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
                     cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
                     successCount++;
-
-                    if (writeDynamicParamToDBFile(name))
-                        WalInfo("Added %s to Dynamic Notify DB File\n", att.name);
-                    else
-                        WalError("Write to DB file failed for '%s'\n", name);
                 }
                 else
                 {
