@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <wdmp-c.h>
 #include <cimplog.h>
+#include <cJSON.h>
 #include "webpa_rbus.h"
 
 static rbusHandle_t rbus_handle;
@@ -140,8 +141,8 @@ void regWebpaDataModel()
     }
     
     rbusDataElement_t dataElements[2] = {
-        {WEBPA_NOTIFY_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {NotifyParamGetHandler, NULL, NULL, NULL, NULL, NULL}},
-        {WEBPA_NOTIFY_SUBSCRIPTION, RBUS_ELEMENT_TYPE_METHOD, {NULL, NULL, NULL, NULL, NULL, NotifyParamMethodHandler}}
+        {WEBPA_NOTIFY_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {NotifySubscriptionListGetHandler, NULL, NULL, NULL, NULL, NULL}},
+        {WEBPA_NOTIFY_SUBSCRIPTION, RBUS_ELEMENT_TYPE_METHOD, {NULL, NULL, NULL, NULL, NULL, NotifySubscriptionListMethodHandler}}
     };
 
 	rc = rbus_regDataElements(rbus_handle, 2, dataElements);
@@ -157,67 +158,11 @@ void regWebpaDataModel()
 	return;
 }
 
-static void appendFailure(char *buf, size_t *len, size_t capacity, const char *param, const char *failure_reason)
-{
-    if (!buf || !len || *len >= capacity) return;
-
-    size_t rem = capacity - *len;
-    int n;
-
-    if (*len == 0)
-        n = snprintf(buf + *len, rem, "%s:%s", param, failure_reason);
-    else
-        n = snprintf(buf + *len, rem, ", %s:%s", param, failure_reason);
-
-    if (n < 0)
-    {
-        WalError("snprintf encoding error while appending failure\n");
-    }
-    else if ((size_t)n >= rem)
-    {
-        WalError("failure buffer truncated while appending '%s:%s'\n", param, failure_reason);
-        *len = capacity - 1;
-        buf[*len] = '\0';
-    }
-    else
-    {
-        *len += (size_t)n;
-    }
-}
-
-static void appendSuccess(char *buf, size_t *len, size_t capacity, const char *param)
-{
-    if (!buf || !len || *len >= capacity) return;
-
-    size_t rem = capacity - *len;
-    int n;
-
-    if (*len == 0)
-        n = snprintf(buf + *len, rem, "%s", param);
-    else
-        n = snprintf(buf + *len, rem, ", %s", param);
-
-    if (n < 0)
-    {
-        WalError("snprintf encoding error while appending success\n");
-    }
-    else if ((size_t)n >= rem)
-    {
-        WalError("successBuf truncated while appending '%s'\n", param);
-        *len = capacity - 1;
-        buf[*len] = '\0';
-    }
-    else
-    {
-        *len += (size_t)n;
-    }
-}
-
-rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
+rbusError_t NotifySubscriptionListGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts)
 {
     (void)handle;
     (void)opts;
-    WalInfo("NotifyParamGetHandler is called\n");
+    WalInfo("NotifySubscriptionListGetHandler is called\n");
     const char* paramName = NULL;
 
     paramName = rbusProperty_GetName(property);
@@ -231,7 +176,7 @@ rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, 
 
     if(buffer == NULL)
     {
-        WalError("NotifyParamGetHandler: Failed to get notify param list.\n");
+        WalError("NotifySubscriptionListGetHandler: Failed to get notify param list.\n");
         return RBUS_ERROR_BUS_ERROR;
     }
 
@@ -244,7 +189,7 @@ rbusError_t NotifyParamGetHandler(rbusHandle_t handle, rbusProperty_t property, 
     return RBUS_ERROR_SUCCESS;
 }
 
-rbusError_t NotifyParamMethodHandler(
+rbusError_t NotifySubscriptionListMethodHandler(
     rbusHandle_t handle,
     const char* methodName,
     rbusObject_t inParams,
@@ -255,16 +200,14 @@ rbusError_t NotifyParamMethodHandler(
     (void)methodName;
     (void)asyncHandle;
 
-    rbusValue_t message, statusCode;
-    message = statusCode = NULL;
-    WDMP_STATUS wret = WDMP_FAILURE;
+    rbusValue_t message = NULL, statusCode = NULL;
     NOTIFY_SUBSCRIPTION_STATUS_CODE notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
-    int prop_count  = 0, failureCount = 0, successCount = 0, alreadySubscribedCount = 0, invalidCount = 0;
 
     rbusValue_Init(&message);
     rbusValue_Init(&statusCode);
 
-    if(getBootupNotifyInProgress())
+    /* Reject subscription while device bootup */
+    if(getBootupNotifyInitDone())
     {
         notifyStatus = NOTIFY_SUBSCRIPTION_BOOTUP_IN_PROGRESS;
         WalInfo("Notification setup during Bootup is in Progress\n");
@@ -276,11 +219,11 @@ rbusError_t NotifyParamMethodHandler(
         return RBUS_ERROR_BUS_ERROR;
     }
 
-/* Extract inParams */
-    rbusProperty_t props = rbusObject_GetProperties(inParams);
-    prop_count = props ? rbusProperty_Count(props) : 0;
+    /* Extract inParams */
+    rbusProperty_t prop = rbusObject_GetProperties(inParams);
+    int paramCount = prop ? rbusProperty_Count(prop) : 0;
 
-    if (prop_count == 0)
+    if (paramCount == 0)
     {
         notifyStatus = NOTIFY_SUBSCRIPTION_INVALID_INPUT;
         WalError("No parameters provided\n");
@@ -292,43 +235,46 @@ rbusError_t NotifyParamMethodHandler(
         return RBUS_ERROR_INVALID_INPUT;
     }
 
-    WalInfo("No. of parameters received to subscribe: %d\n", prop_count);
+    WalInfo("No. of parameters received to subscribe: %d\n", paramCount);
 
-    size_t allocSize = prop_count * 128;
-    char *successBuf = calloc(1, allocSize);
-    char *failedBuf  = calloc(1, allocSize);
-    size_t failedLen = 0, successLen = 0;
-    if (!successBuf || !failedBuf) {
-        WalError("malloc failed for buffers\n");
-        free(successBuf);
-        free(failedBuf);
-        return RBUS_ERROR_BUS_ERROR;
-    }
+    int failureCount = 0, successCount = 0, invalidCount = 0;
 
-    for (int i = 0; i < prop_count; i++)
+    cJSON *responsePayload = cJSON_CreateObject();
+    cJSON *successArr = cJSON_CreateArray();
+    cJSON *failureArr = cJSON_CreateArray();
+
+    for (int i = 0; i < paramCount; i++)
     {
         char keyName[64];
-        param_t att;
-        memset(&att, 0, sizeof(att));
-        notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE ;
         snprintf(keyName, sizeof(keyName), "param%d", i);
         rbusValue_t paramVal = rbusObject_GetValue(inParams, keyName);
         if (!paramVal || rbusValue_GetType(paramVal) != RBUS_OBJECT)
         {
             WalError("Missing or invalid object structure for %s\n", keyName);
+            cJSON *failObj = cJSON_CreateObject();
+            cJSON_AddStringToObject(failObj, "parameter", keyName);
+            cJSON_AddStringToObject(failObj, "reason", "Invalid object structure");
+            cJSON_AddItemToArray(failureArr, failObj);
+            failureCount++;
+            invalidCount++;
             continue;
         }
         rbusObject_t subObj = rbusValue_GetObject(paramVal);
         if (!subObj)
         {
             WalError("Invalid object structure for %s\n", keyName);
+            cJSON *failObj = cJSON_CreateObject();
+            cJSON_AddStringToObject(failObj, "parameter", keyName);
+            cJSON_AddStringToObject(failObj, "reason", "Invalid object value");
+            cJSON_AddItemToArray(failureArr, failObj);
+            failureCount++;
+            invalidCount++;
             continue;
         }
 
-        rbusValue_t val = NULL;
         const char* name = NULL;
         const char* notifType = NULL;
-        const char *failure_reason = NULL;
+        rbusValue_t val = NULL;
 
         val = rbusObject_GetValue(subObj, "name");
         if (val && rbusValue_GetType(val) == RBUS_STRING)
@@ -339,20 +285,14 @@ rbusError_t NotifyParamMethodHandler(
             notifType = rbusValue_GetString(val, NULL);
 
         WalInfo("%s: name=%s, notificationType=%s\n", keyName, name ? name : "NULL", notifType ? notifType : "NULL");
-        if (!name || !*name)
+        if (!name || !*name || !notifType || !*notifType)
         {
-            WalError("Parameter name is Empty/NULL\n");
-            failure_reason = "Parameter name is Empty/NULL ";
-            appendFailure(failedBuf, &failedLen, allocSize, "NULL", failure_reason);
-            invalidCount++; failureCount++;
-            continue;
-        }
-        if (!notifType || !*notifType)
-        {
-            WalError("Notification type is Empty/NULL\n");
-            failure_reason = "Notification type is Empty/NULL";
-            appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
-            invalidCount++; failureCount++;
+            cJSON *failObj = cJSON_CreateObject();
+            cJSON_AddStringToObject(failObj, "parameter", name ? name : "NULL");
+            cJSON_AddStringToObject(failObj, "reason", "Name or notificationType is Empty/NULL");
+            cJSON_AddItemToArray(failureArr, failObj);
+            failureCount++;
+            invalidCount++;
             continue;
         }
 
@@ -361,10 +301,15 @@ rbusError_t NotifyParamMethodHandler(
             g_NotifyParam *node = searchParaminGlobalList(name);
             if(!node || node->paramSubscriptionStatus == OFF)
             {
+                WDMP_STATUS wret = WDMP_FAILURE;
+                param_t att = {0};
                 att.name = strdup(name);
                 att.value = strdup("1");
                 att.type = WDMP_INT;
+
+                /* Turn ON notification via setAttributes */
                 setAttributes(&att, 1, NULL, &wret);
+
                 if (wret == WDMP_SUCCESS)
                 {
                     if (!node)
@@ -381,22 +326,21 @@ rbusError_t NotifyParamMethodHandler(
                     }
 
                     WalInfo("Successfully set notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
-                    appendSuccess(successBuf, &successLen, allocSize, name);
+                    cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
                     successCount++;
-                    if (!writeDynamicParamToDBFile(name))
-                    {
-                        WalError("Write to DB file failed for '%s'\n", name);
-                    }
-                    else
-                    {
+
+                    if (writeDynamicParamToDBFile(name))
                         WalInfo("Added %s to Dynamic Notify DB File\n", att.name);
-                    }
+                    else
+                        WalError("Write to DB file failed for '%s'\n", name);
                 }
                 else
                 {
                     WalError("Failed to turn notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
-                    failure_reason = "set attributes failed";
-                    appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
+                    cJSON *failObj = cJSON_CreateObject();
+                    cJSON_AddStringToObject(failObj, "parameter", name);
+                    cJSON_AddStringToObject(failObj, "reason", "Failed to turn notification ON for parameter");
+                    cJSON_AddItemToArray(failureArr, failObj);
                     failureCount++;
                 }
                 WAL_FREE(att.name);
@@ -404,70 +348,89 @@ rbusError_t NotifyParamMethodHandler(
             }
             else if(node->paramSubscriptionStatus == ON)
             {
-                WalInfo("Parameter '%s' is already subscribed. \n", name);
-                failure_reason = "Subscription already exists";
-                appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
-                failureCount++;
-                alreadySubscribedCount++;
+                /* Already subscribed: treat as success for simplicity */
+                WalInfo("%s is already subscribed. \n", name);
+                cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
+                successCount++;
                 continue;
             }
         }
         else
         {
             WalError("Unsupported notification type: %s\n", notifType);
-            failure_reason = "Unsupported notification type";
-            appendFailure(failedBuf, &failedLen, allocSize, name, failure_reason);
-            failureCount++; invalidCount++;
+            cJSON *failObj = cJSON_CreateObject();
+            cJSON_AddStringToObject(failObj, "parameter", name);
+            cJSON_AddStringToObject(failObj, "reason", "Unsupported notification type");
+            cJSON_AddItemToArray(failureArr, failObj);
+            failureCount++;
+            invalidCount++;
             continue;
         }
     }
 
-    if (failureCount == 0)
+    /* message and structure */
+    const int total = successCount + failureCount;
+    const int isAllSuccess = (failureCount == 0 && total > 0);
+    const int isAllFailure = (successCount == 0 && total > 0);
+    const int isPartial    = (!isAllSuccess && !isAllFailure);
+
+    const char* msgStr;
+    if (isAllSuccess)
     {
-        rbusValue_SetString(message, "Success");
+        msgStr = "Subscriptions Success";
         notifyStatus = NOTIFY_SUBSCRIPTION_SUCCESS;
     }
-    else if (successCount == 0)
+    else if (isAllFailure)
     {
-        if(alreadySubscribedCount > 0 && alreadySubscribedCount == failureCount)
+        if (invalidCount == failureCount)
         {
-            rbusValue_SetString(message, "Subscriptions already exists");
-            notifyStatus = NOTIFY_SUBSCRIPTION_ALREADY_EXISTS;
-        }
-        else if(invalidCount > 0 && invalidCount ==  failureCount)
-        {
-            rbusValue_SetString(message, "Unsupported parameter name/type");
+            msgStr = "Invalid input";
             notifyStatus = NOTIFY_SUBSCRIPTION_INVALID_INPUT;
         }
         else
         {
-            rbusValue_SetString(message, "Failure");
+            msgStr = "Subscriptions failed";
             notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
         }
     }
     else
     {
-        size_t buffSize = snprintf(NULL, 0, "Success [%s], Failed [%s]", successBuf[0] ? successBuf : "None", failedBuf[0] ? failedBuf : "None") + 1;
-        char *buffer = malloc(buffSize);
-        if(buffer)
-        {
-            snprintf(buffer, buffSize, "Success [%s], Failed [%s]", successBuf[0] ? successBuf : "None", failedBuf[0] ? failedBuf : "None");
-            rbusValue_SetString(message, buffer);
-            free(buffer);
-        } else {
-            rbusValue_SetString(message, "Unknown");
-        }
+        msgStr = "Partial success";
         notifyStatus = NOTIFY_SUBSCRIPTION_MULTI_STATUS;
     }
-    rbusValue_SetInt32(statusCode, notifyStatus);
-    rbusObject_SetValue(outParams, "message", message);
-    rbusObject_SetValue(outParams, "statusCode", statusCode);
 
-    WalInfo("NotifyParamMethodHandler completed: %s (Status: %d)\n", rbusValue_GetString(message, NULL), rbusValue_GetInt32(statusCode));
-    
-    rbusValue_Release(message); rbusValue_Release(statusCode);
-    if (successBuf) free(successBuf);
-    if(failedBuf) free(failedBuf);
+    /* Build JSON response */
+    if (isPartial)
+    {
+        cJSON_AddStringToObject(responsePayload, "message", msgStr);
+        cJSON_AddItemToObject(responsePayload, "success", successArr);
+        cJSON_AddItemToObject(responsePayload, "failure", failureArr);
+        cJSON_AddNumberToObject(responsePayload, "statusCode", notifyStatus);
+    }
+    else
+    {
+        cJSON_Delete(successArr);
+        cJSON_Delete(failureArr);
+
+        cJSON_AddStringToObject(responsePayload, "message", msgStr);
+        cJSON_AddNumberToObject(responsePayload, "statusCode", notifyStatus);
+    }
+
+    /* Serialize JSON */
+    char *respStr = cJSON_PrintUnformatted(responsePayload);
+    if (respStr)
+    {
+        rbusValue_SetString(message, respStr);
+        rbusValue_SetInt32(statusCode, notifyStatus);
+        rbusObject_SetValue(outParams, "message", message);
+        rbusObject_SetValue(outParams, "statusCode", statusCode);
+        free(respStr);
+    }
+
+    WalInfo("NotifySubscriptionListMethodHandler completed: %s (Status: %d)\n", msgStr, notifyStatus);
+    cJSON_Delete(responsePayload);
+    rbusValue_Release(message);
+    rbusValue_Release(statusCode);
 
     return RBUS_ERROR_SUCCESS;
 }

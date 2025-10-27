@@ -8,7 +8,7 @@
 #include "webpa_internal.h"
 #include "webpa_notification.h"
 
-#define WEBPA_NOTIFY_PARAM "Device.Webpa.NotifyParameters"
+#define WEBPA_NOTIFY_PARAM "Device.DeviceInfo.Webpa.NotifySubscriptionList"
 #define WEBPA_PARAM_VERSION                 "Device.X_RDKCENTRAL-COM_Webpa.Version"
 #define WEBPA_PARAM_PROTOCOL_VERSION        "Device.DeviceInfo.Webpa.X_COMCAST-COM_SyncProtocolVersion"
 #define WiFi_FactoryResetRadioAndAp	    "Device.WiFi.X_CISCO_COM_FactoryResetRadioAndAp"
@@ -732,7 +732,7 @@ int getWebpaParameterValues(char **parameterNames, int paramCount, int *val_size
                     }
                     case 2:
                     {
-                        if((isWildcard == 0) && (strcmp(parameterNames[i], WEBPA_NOTIFY_PARAM) == 0)) // Device.Webpa.NotifyParameters
+                        if((isWildcard == 0) && (strcmp(parameterNames[i], WEBPA_NOTIFY_PARAM) == 0)) // Device.DeviceInfo.Webpa.NotifySubscriptionList
                         {
                             paramVal[k] = (parameterValStruct_t *) malloc(sizeof(parameterValStruct_t));
                             paramVal[k]->parameterName = strndup(WEBPA_NOTIFY_PARAM, MAX_PARAMETERNAME_LEN);

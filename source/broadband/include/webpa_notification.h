@@ -160,6 +160,6 @@ g_NotifyParam* searchParaminGlobalList(const char *paramName);
 char* CreateJsonFromGlobalNotifyList();
 char* readDynamicParamsFromDBFile();
 int writeDynamicParamToDBFile(const char *param);
-void setBootupNotifyInProgress(bool value);
-bool getBootupNotifyInProgress();
+void setBootupNotifyInitDone(bool value);
+bool getBootupNotifyInitDone();
 #endif

@@ -239,7 +239,7 @@ const char * notifyparameters[]={
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.Softflowd.Enable"
 };
 
-bool bootupNotifyInProgress = false;
+bool bootupNotifyInitDone = false;
 /*----------------------------------------------------------------------------*/
 /*                             Function Prototypes                            */
 /*----------------------------------------------------------------------------*/
@@ -821,20 +821,17 @@ static void setInitialNotify()
 		else
 		{
 			char param[512] = {'\0'};
-			while (fscanf(fp,"%511s", param) != EOF)
+			while (fscanf(fp,"%511s", param) != EOF) 
 			{
+				WalInfo("Adding Dynamic param: %s to Global Notify List\n", param ? param : "NULL");
 				addParamToGlobalList(param,DYNAMIC_PARAM,OFF);
 				notifyListSize++;
 			}
 			fclose(fp);
 		}
-
+		sleep(5 * 60); // delay for 5 minutes
 		do
 		{
-
-			// Set flag to true for initial notification
-			setBootupNotifyInProgress(true);
-
 			if(backoffRetryTime < max_retry_sleep)
 			{
 				backoffRetryTime = (1 << c) - 1;
@@ -873,9 +870,9 @@ static void setInitialNotify()
 				currentParam = currentParam->next;
 			}
 			WAL_FREE(attArr);
-			// Clear the flag for accepting cloud requests
-			setBootupNotifyInProgress(false);
-			WalInfo("\n bootupNotifyInProgress flag is cleared. Cloud requests now allowed.\n");
+			// Set to true after bootup
+			setBootupNotifyInitDone(true);
+			WalInfo("\n bootupNotifyInitDone flag is set to true. Cloud requests now allowed.\n");
 
 			if (isError == 0)
 			{
@@ -2257,14 +2254,14 @@ int write_sync_notify_into_file(char *buff)
     return 0;
 }
 
-bool getBootupNotifyInProgress()
+bool getBootupNotifyInitDone()
 {
-    return bootupNotifyInProgress;
+    return bootupNotifyInitDone;
 }
 
-void setBootupNotifyInProgress(bool value)
+void setBootupNotifyInitDone(bool value)
 {
-   bootupNotifyInProgress  = value;
+   bootupNotifyInitDone  = value;
 }
 
 void addParamToGlobalList(const char *paramName,bool paramType, bool paramSubscriptionStatus)
