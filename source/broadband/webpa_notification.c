@@ -829,7 +829,7 @@ static void setInitialNotify()
 			}
 			fclose(fp);
 		}
-		sleep(5 * 60); // delay for 5 minutes
+		sleep(6 * 60); // delay for 6 minutes
 		do
 		{
 			if(backoffRetryTime < max_retry_sleep)
@@ -872,7 +872,7 @@ static void setInitialNotify()
 			WAL_FREE(attArr);
 			// Set to true after bootup
 			setBootupNotifyInitDone(true);
-			WalInfo("\n bootupNotifyInitDone flag is set to true. Cloud requests now allowed.\n");
+			WalInfo("bootupNotifyInitDone flag is set to true. Cloud requests now allowed.\n");
 
 			if (isError == 0)
 			{

@@ -24,7 +24,7 @@
     #define WEBPA_CFG_FILE                      "/tmp/webpa_cfg.json"
 #endif
 #define SYNC_NOTIFY_PARAM_BACKUP_FILE "/tmp/webpa_sync_notification.json"
-#define NOTIFY_PARAM_FILE "/nvram/webpa_dynamic_notify_params.txt"
+#define NOTIFY_PARAM_FILE "/nvram/webpa_dynamic_params_db"
 /*----------------------------------------------------------------------------*/
 /*                               Data Structures                              */
 /*----------------------------------------------------------------------------*/
@@ -103,13 +103,12 @@ typedef struct
 typedef void (*notifyCB)(NotifyData *notifyDataPtr);
 
 typedef enum {
-    NOTIFY_SUBSCRIPTION_SUCCESS                 =  200,
-    NOTIFY_SUBSCRIPTION_FAILURE                 =  500,
-    NOTIFY_SUBSCRIPTION_INVALID_INPUT           =  400,
-    NOTIFY_SUBSCRIPTION_ALREADY_EXISTS          =  409,
-    NOTIFY_SUBSCRIPTION_BOOTUP_IN_PROGRESS      =  503,
-    NOTIFY_SUBSCRIPTION_MULTI_STATUS            =  207
-} NOTIFY_SUBSCRIPTION_STATUS_CODE;
+    NOTIFY_EVENT_SUCCESS                    =  200,
+    NOTIFY_EVENT_FAILURE                    =  500,
+    NOTIFY_EVENT_MULTI_STATUS               =  207,
+    NOTIFY_EVENT_ERR_INVALID_INPUT          =  400,
+    NOTIFY_EVENT_ERR_BOOTUP_IN_PROGRESS     =  503
+} NOTIFY_EVENT_STATUS_CODE;
 
 /*----------------------------------------------------------------------------*/
 /*                             Function Prototypes                            */
