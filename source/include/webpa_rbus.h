@@ -13,8 +13,8 @@
 #include <cimplog.h>
 #include <cJSON.h>
 
-#define WEBPA_NOTIFY_PARAM "Device.DeviceInfo.Webpa.NotifySubscriptionList"
-#define WEBPA_NOTIFY_SUBSCRIPTION "Device.Webpa.Subscription.NotifyEvent()"
+#define WEBPA_NOTIFY_SUBSCRIPTION_PARAM "Device.DeviceInfo.Webpa.NotifySubscriptionParameters"
+#define WEBPA_NOTIFY_SUBSCRIPTION_METHOD "Device.Webpa.Subscription.NotifyEvent()"
 
 bool isRbusEnabled();
 bool isRbusInitialized();

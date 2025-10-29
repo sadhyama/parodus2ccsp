@@ -138,19 +138,19 @@ void regWebpaDataModel()
     }
     
     rbusDataElement_t dataElements[2] = {
-        {WEBPA_NOTIFY_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {NotifySubscriptionListGetHandler, NULL, NULL, NULL, NULL, NULL}},
-        {WEBPA_NOTIFY_SUBSCRIPTION, RBUS_ELEMENT_TYPE_METHOD, {NULL, NULL, NULL, NULL, NULL, NotifySubscriptionListMethodHandler}}
+        {WEBPA_NOTIFY_SUBSCRIPTION_PARAM, RBUS_ELEMENT_TYPE_PROPERTY, {NotifySubscriptionListGetHandler, NULL, NULL, NULL, NULL, NULL}},
+        {WEBPA_NOTIFY_SUBSCRIPTION_METHOD, RBUS_ELEMENT_TYPE_METHOD, {NULL, NULL, NULL, NULL, NULL, NotifySubscriptionListMethodHandler}}
     };
 
 	rc = rbus_regDataElements(rbus_handle, 2, dataElements);
 
     if(rc == RBUS_ERROR_SUCCESS)
     {
-		WalInfo("Registered data elements: %s, %s with rbus\n", WEBPA_NOTIFY_PARAM, WEBPA_NOTIFY_SUBSCRIPTION);
+		WalInfo("Registered data elements: %s, %s with rbus\n", WEBPA_NOTIFY_SUBSCRIPTION_PARAM, WEBPA_NOTIFY_SUBSCRIPTION_METHOD);
     }
     else
 	{
-		WalError("Failed in registering data elements: %s, %s with rbus\n", WEBPA_NOTIFY_PARAM, WEBPA_NOTIFY_SUBSCRIPTION);
+		WalError("Failed in registering data elements: %s, %s with rbus\n", WEBPA_NOTIFY_SUBSCRIPTION_PARAM, WEBPA_NOTIFY_SUBSCRIPTION_METHOD);
 	}
 	return;
 }
@@ -159,11 +159,11 @@ rbusError_t NotifySubscriptionListGetHandler(rbusHandle_t handle, rbusProperty_t
 {
     (void)handle;
     (void)opts;
-    WalInfo("NotifySubscriptionListGetHandler is called\n");
+    WalPrint("NotifySubscriptionListGetHandler is called\n");
     const char* paramName = NULL;
 
     paramName = rbusProperty_GetName(property);
-    if(strncmp(paramName, WEBPA_NOTIFY_PARAM, strlen(WEBPA_NOTIFY_PARAM)) != 0)
+    if(strncmp(paramName, WEBPA_NOTIFY_SUBSCRIPTION_PARAM, strlen(WEBPA_NOTIFY_SUBSCRIPTION_PARAM)) != 0)
     {
         WalError("Unexpected parameter: %s\n", paramName);
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
@@ -240,6 +240,7 @@ static int validate_notify_params(rbusObject_t inParams, int paramCount, char *e
         rbusValue_t paramVal = rbusObject_GetValue(inParams, keyName);
         if (!paramVal || rbusValue_GetType(paramVal) != RBUS_OBJECT)
         {
+            WalError("Invalid method request format. param%d is not an object\n", i);
             snprintf(err_msg, len, "Invalid method request format");
             return -1;
         }
@@ -247,6 +248,7 @@ static int validate_notify_params(rbusObject_t inParams, int paramCount, char *e
         rbusObject_t subObj = rbusValue_GetObject(paramVal);
         if (!subObj)
         {
+            WalError("Invalid method request format\n");
             snprintf(err_msg, len, "Invalid method request format");
             return -1;
         }
@@ -254,19 +256,47 @@ static int validate_notify_params(rbusObject_t inParams, int paramCount, char *e
         const char* name = NULL;
         const char* notifType = NULL;
 
-        rbusValue_t val = rbusObject_GetValue(subObj, "name");
-        if (val && rbusValue_GetType(val) == RBUS_STRING)
-            name = rbusValue_GetString(val, NULL);
-
-        val = rbusObject_GetValue(subObj, "notificationType");
-        if (val && rbusValue_GetType(val) == RBUS_STRING)
-            notifType = rbusValue_GetString(val, NULL);
+        // Extract and validate parameter name
+        rbusValue_t valName = rbusObject_GetValue(subObj, "name");
+        if (!valName)
+        {
+            WalError("Missing name in input\n");
+            snprintf(err_msg, len, "Missing name in input");
+            return -1;
+        }
+        else if (rbusValue_GetType(valName) != RBUS_STRING)
+        {
+            char valBuf[256] = {0};
+            rbusValue_ToString(valName, valBuf, sizeof(valBuf));
+            WalError("name is not a string in input. Actual type=%d, value=%s\n", rbusValue_GetType(valName), valBuf);
+            snprintf(err_msg, len, "name is not a string (type=%d, value=%s)", rbusValue_GetType(valName), valBuf);
+            return -1;
+        }
+        name = rbusValue_GetString(valName, NULL);
 
         if (!name || !*name)
         {
             snprintf(err_msg, len, "Parameter name is Empty/NULL");
             return -1;
         }
+
+        // Extract and validate parameter type
+        rbusValue_t valType = rbusObject_GetValue(subObj, "notificationType");
+        if (!valType)
+        {
+            snprintf(err_msg, len, "Missing notificationType in input");
+            return -1;
+        }
+        else if (rbusValue_GetType(valType) != RBUS_STRING)
+        {
+            char valBuf[256] = {0};
+            rbusValue_ToString(valType, valBuf, sizeof(valBuf));
+            WalError("notificationType is not a string in input. Actual type=%d, value=%s\n", rbusValue_GetType(valType), valBuf);
+            snprintf(err_msg, len, "notificationType is not a string (type=%d, value=%s)", rbusValue_GetType(valType), valBuf);
+            return -1;
+        }
+        notifType = rbusValue_GetString(valType, NULL);
+
         if(!notifType || !*notifType)
         {
             snprintf(err_msg, len, "Parameter type is Empty/NULL");
@@ -287,11 +317,15 @@ rbusError_t NotifySubscriptionListMethodHandler(
     (void)methodName;
     (void)asyncHandle;
 
+    WalInfo("------------ NotifySubscriptionListMethodHandler ----------\n");
+    WalInfo("Received dynamic notifications for subscription\n");
+
     /* Reject subscription while device bootup */
     if(!getBootupNotifyInitDone())
     {
         WalInfo("Notification setup during Bootup is in Progress\n");
         setRbusResponse(outParams, "Notification setup during Bootup is in Progress", NOTIFY_SUBSCRIPTION_ERR_BOOTUP_IN_PROGRESS, NULL, NULL);
+        WalInfo("Notification setup during Bootup is in Progress, rejecting method request\n");
         return RBUS_ERROR_BUS_ERROR;
     }
 
@@ -303,14 +337,14 @@ rbusError_t NotifySubscriptionListMethodHandler(
     rbusProperty_t prop = rbusObject_GetProperties(inParams);
     int paramCount = prop ? rbusProperty_Count(prop) : 0;
 
-    WalInfo("No. of parameters received to subscribe: %d\n", paramCount);
+    WalInfo("Number of parameters received to subscribe: %d\n", paramCount);
 
     char err_msg[512] = {0};
     int ret = validate_notify_params(inParams, paramCount, err_msg,  sizeof(err_msg));
 
     if(ret == 0)
     {
-        WalInfo("Method request parameter validation success. Receieved parameters are valid\n");
+        WalInfo("Method request parameter validation is successful\n");
         for (int i = 0; i < paramCount; i++)
         {
             char keyName[512];
@@ -324,6 +358,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
             name = rbusValue_GetString(rbusObject_GetValue(subObj, "name"), NULL);
             notifType = rbusValue_GetString(rbusObject_GetValue(subObj, "notificationType"), NULL);
 
+            WalInfo("Processing parmaeter %s for subscription", name);
             if (notifType && strcmp(notifType, "ValueChange") == 0)
             {
                 g_NotifyParam *node = searchParaminGlobalList(name);
@@ -340,16 +375,16 @@ rbusError_t NotifySubscriptionListMethodHandler(
 
                     if (wret == WDMP_SUCCESS)
                     {
-                        WalInfo("Succesfully subscribed to notification for parameter %s (ret: %d)\n", att.name, (int)wret);
+                        WalInfo("Succesfully subscribed notification for parameter %s (ret: %d)\n", att.name, (int)wret);
                         cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
                         successCount++;
 
                         if (!node)
                         {
-                            WalInfo("Adding parameter: %s to global notify list\n", name);
+                            WalInfo("Adding parameter %s to global notify list\n", name);
                             addParamToGlobalList(att.name, DYNAMIC_PARAM, ON);
                             if (writeDynamicParamToDBFile(name))
-                                WalPrint("Added parameter: %s to Dynamic Notify DB File\n", att.name);
+                                WalPrint("Added parameter %s to Dynamic Notify DB File\n", att.name);
                             else
                                 WalError("Write to DB file failed for %s\n", name);
                         }
@@ -361,10 +396,10 @@ rbusError_t NotifySubscriptionListMethodHandler(
                     }
                     else
                     {
-                        WalError("Failed to subscribe to notification for parameter %s (ret: %d)\n", att.name, (int)wret);
+                        WalError("Failed to subscribe notification for parameter %s (ret: %d)\n", att.name, (int)wret);
                         cJSON *failObj = cJSON_CreateObject();
                         cJSON_AddStringToObject(failObj, "parameter", name);
-                        cJSON_AddStringToObject(failObj, "reason", "setAttributes failed for parameter");
+                        cJSON_AddStringToObject(failObj, "reason", "Failed to subscribe for notification");
                         cJSON_AddItemToArray(failureArr, failObj);
                         failureCount++;
                     }
@@ -374,7 +409,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
                 else if(getParamStatus(node) == ON)
                 {
                     /* Already subscribed: treat as success for simplicity */
-                    WalInfo("Parameter: %s is subscribed already\n", name);
+                    WalInfo("Subscription already exists for parameter %s\n", name);
                     cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
                     successCount++;
                     continue;
@@ -395,10 +430,11 @@ rbusError_t NotifySubscriptionListMethodHandler(
     }
     else
     {
-        WalError("Method request parameter validation failed. err: %s\n", err_msg);
+        WalError("Parameter validation for subscription method request failed\n");
         cJSON_Delete(successArr);
         cJSON_Delete(failureArr);
         setRbusResponse(outParams, err_msg, NOTIFY_SUBSCRIPTION_ERR_INVALID_INPUT, NULL, NULL);
+        WalError("NotifySubscriptionListMethodHandler failed: %s\n", err_msg);
         return RBUS_ERROR_INVALID_INPUT;
     }
 
@@ -420,7 +456,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
     {
         if (invalidCount == failureCount)
         {
-            msgStr = "Unsupported notification type";
+            msgStr = "Notification type is not supported";
             notifyStatus = NOTIFY_SUBSCRIPTION_ERR_INVALID_INPUT;
         }
         else

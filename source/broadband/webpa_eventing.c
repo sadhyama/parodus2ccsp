@@ -126,7 +126,7 @@ void readDynamicParamsFromDBFile(int *notifyListSize)
 
 	if (access(NOTIFY_PARAM_FILE, F_OK) != 0)
 	{
-		WalInfo("No dynamic parameters were available for this device\n");
+		WalInfo("Webpa dynamic notify db file is not available\n");
 		return ;
 	}
 
@@ -156,13 +156,11 @@ char* CreateJsonFromGlobalNotifyList()
 	cJSON *jsonArray = cJSON_CreateArray();
     while (temp != NULL) 
 	{
-        // Local copies for safe access outside lock
         char *paramName = NULL;
         bool paramType = false;
         bool status = false;
         g_NotifyParam *next = NULL;
 
-        // Copy under lock
         pthread_mutex_lock(&g_NotifyParamMut);
         paramName = strdup(temp->paramName);
         paramType = temp->paramType;
@@ -196,8 +194,11 @@ bool getParamStatus(g_NotifyParam *param)
 // Function to safely update paramSubscriptionStatus
 void updateParamStatus(g_NotifyParam *param, bool status) 
 {
-    if (param == NULL) 
+    if (param == NULL)
+	{
+		WalError("g_NotifyParam node is NULL");
         return;
+	}
 
     pthread_mutex_lock(&g_NotifyParamMut);
     param->paramSubscriptionStatus = status;

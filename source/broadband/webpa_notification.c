@@ -795,13 +795,13 @@ static void setInitialNotify()
 		WDMP_STATUS ret = WDMP_FAILURE;
 		param_t *attArr = NULL;
 
-		// Adding static params to global param list
+		// Add static params to global param list
 		for (i = 0; i < notifyListSize; i++)
 		{
 			addParamToGlobalList(notifyparameters[i],STATIC_PARAM,OFF);
 		}
 
-		// Read dynamic params from DB and add into global param list
+		// Read dynamic params from DB and add to global param list
 		readDynamicParamsFromDBFile(&notifyListSize);
 
 		sleep(7 * 60); // delay for 7 minutes for testing
@@ -850,7 +850,7 @@ static void setInitialNotify()
 			WAL_FREE(attArr);
 			// Set the flag for accepting cloud requests
 			setBootupNotifyInitDone(true);
-			WalInfo("bootupNotifyInitDone flag is set to true. Cloud requests now allowed.\n");
+			WalInfo("set initial notification during bootup is completed. bootupNotifyInitDone flag is set to true\n");
 
 			if (isError == 0)
 			{

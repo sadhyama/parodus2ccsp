@@ -9,7 +9,7 @@
 #include "webpa_notification.h"
 #include "webpa_eventing.h"
 
-#define WEBPA_NOTIFY_PARAM "Device.DeviceInfo.Webpa.NotifySubscriptionList"
+#define WEBPA_NOTIFY_SUBSCRIPTION_PARAM "Device.DeviceInfo.Webpa.NotifySubscriptionParameters"
 #define WEBPA_PARAM_VERSION                 "Device.X_RDKCENTRAL-COM_Webpa.Version"
 #define WEBPA_PARAM_PROTOCOL_VERSION        "Device.DeviceInfo.Webpa.X_COMCAST-COM_SyncProtocolVersion"
 #define WiFi_FactoryResetRadioAndAp	    "Device.WiFi.X_CISCO_COM_FactoryResetRadioAndAp"
@@ -532,9 +532,9 @@ int getWebpaParameterValues(char **parameterNames, int paramCount, int *val_size
                                 paramVal[k]->type = ccsp_string;
                                 k++;
                             }
-                            else if(strcmp(parameterNames[i], WEBPA_NOTIFY_PARAM) == 0)
+                            else if(strcmp(parameterNames[i], WEBPA_NOTIFY_SUBSCRIPTION_PARAM) == 0)
                             {
-                                paramVal[k]->parameterName = strndup(WEBPA_NOTIFY_PARAM, MAX_PARAMETERNAME_LEN);
+                                paramVal[k]->parameterName = strndup(WEBPA_NOTIFY_SUBSCRIPTION_PARAM, MAX_PARAMETERNAME_LEN);
                                 char *paramList = NULL;
                                 paramList = CreateJsonFromGlobalNotifyList();
                                 if(paramList != NULL && strlen(paramList) > 0)
@@ -600,7 +600,7 @@ int getWebpaParameterValues(char **parameterNames, int paramCount, int *val_size
                                 k++;
 
                                 paramVal[k] = (parameterValStruct_t *) malloc(sizeof(parameterValStruct_t));
-                                paramVal[k]->parameterName = strndup(WEBPA_NOTIFY_PARAM, MAX_PARAMETERNAME_LEN);
+                                paramVal[k]->parameterName = strndup(WEBPA_NOTIFY_SUBSCRIPTION_PARAM, MAX_PARAMETERNAME_LEN);
                                 char *paramList = NULL;
                                 paramList = CreateJsonFromGlobalNotifyList();
                                 if(paramList != NULL && strlen(paramList) > 0)
