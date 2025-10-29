@@ -39,23 +39,6 @@ extern int numLoops;
 #define OnboardLog(...)
 #endif
 
-#define DYNAMIC_PARAM 0
-#define STATIC_PARAM 1
-#define OFF 0
-#define ON 1
-
-typedef struct g_NotifyParam
-{
-    char *paramName;
-    bool paramType;
-    bool paramSubscriptionStatus;
-    struct g_NotifyParam *next;
-} g_NotifyParam;
-
-extern g_NotifyParam *g_NotifyParamHead;
-extern g_NotifyParam *g_NotifyParamTail;
-extern pthread_mutex_t g_NotifyParamMut;
-
 /**
  * @brief Set operations supported by WebPA.
  */

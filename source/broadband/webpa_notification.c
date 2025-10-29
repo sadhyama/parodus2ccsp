@@ -7,20 +7,20 @@
  */
 
 #include <pthread.h>
-#include <unistd.h>
-#include <cJSON.h>
 #include <math.h>
 #include <uuid/uuid.h>
 #include <string.h>
 #include <errno.h>
 #include "webpa_notification.h"
 #include "webpa_internal.h"
+#include "webpa_eventing.h"
 #ifdef RDKB_BUILD
 #include <sysevent/sysevent.h>
 #endif
 #if defined(FEATURE_SUPPORT_WEBCONFIG)
 #include <webcfg_generic.h>
 #endif
+
 /*----------------------------------------------------------------------------*/
 /*                                   Macros                                   */
 /*----------------------------------------------------------------------------*/
@@ -85,9 +85,6 @@ char *g_systemReadyTime=NULL;
 pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t con=PTHREAD_COND_INITIALIZER;
 pthread_mutex_t device_mac_mutex = PTHREAD_MUTEX_INITIALIZER;
-g_NotifyParam *g_NotifyParamHead = NULL;
-g_NotifyParam *g_NotifyParamTail = NULL;
-pthread_mutex_t g_NotifyParamMut = PTHREAD_MUTEX_INITIALIZER;
 
 const char * notifyparameters[]={
 "Device.NotifyComponent.X_RDKCENTRAL-COM_Connected-Client",
@@ -238,8 +235,6 @@ const char * notifyparameters[]={
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.SafeBrowsing.Enable",
 "Device.DeviceInfo.X_RDKCENTRAL-COM_AdvancedSecurity.Softflowd.Enable"
 };
-
-bool bootupNotifyInitDone = false;
 /*----------------------------------------------------------------------------*/
 /*                             Function Prototypes                            */
 /*----------------------------------------------------------------------------*/
@@ -781,7 +776,6 @@ static void setInitialNotify()
 	char notif[20] = "";
 	const char **notifyparameters = NULL;
 	int notifyListSize = 0;
-	char *dynamic_param_list = NULL;
 	g_NotifyParam *currentParam = NULL;
 
 	int backoffRetryTime = 0;
@@ -790,7 +784,7 @@ static void setInitialNotify()
 	//Retry Backoff count will start at c=2 & calculate 2^c - 1.
 	int c = 2;
 	
-	max_retry_sleep = (1 << backoff_max_time) - 1;
+	max_retry_sleep = (int) pow(2, backoff_max_time) -1;
         WalInfo("setInitialNotify max_retry_sleep is %d\n", max_retry_sleep );
 
 	getNotifyParamList(&notifyparameters, &notifyListSize);
@@ -798,7 +792,6 @@ static void setInitialNotify()
 	//notifyparameters is empty for webpa-video
 	if (notifyparameters != NULL)
 	{
-
 		WDMP_STATUS ret = WDMP_FAILURE;
 		param_t *attArr = NULL;
 
@@ -808,28 +801,11 @@ static void setInitialNotify()
 			addParamToGlobalList(notifyparameters[i],STATIC_PARAM,OFF);
 		}
 
-		// Adding dynamic params to global param list
-		FILE *fp = fopen(NOTIFY_PARAM_FILE, "r");
-		if (fp == NULL)
-		{
-			int err = errno;
-			if (err == ENOENT)
-				WalInfo("Dynamic params are not available for this device\n");
-			else
-				WalError("Failed to open %s. errno: %d (%s)\n", NOTIFY_PARAM_FILE, err, strerror(err));
-		}
-		else
-		{
-			char param[512] = {'\0'};
-			while (fscanf(fp,"%511s", param) != EOF) 
-			{
-				WalInfo("Adding Dynamic param: %s to Global Notify List\n", param ? param : "NULL");
-				addParamToGlobalList(param,DYNAMIC_PARAM,OFF);
-				notifyListSize++;
-			}
-			fclose(fp);
-		}
-		sleep(6 * 60); // delay for 6 minutes
+		// Read dynamic params from DB and add into global param list
+		readDynamicParamsFromDBFile(&notifyListSize);
+
+		sleep(7 * 60); // delay for 7 minutes for testing
+
 		do
 		{
 			if(backoffRetryTime < max_retry_sleep)
@@ -842,26 +818,28 @@ static void setInitialNotify()
 			isError = 0;
 			WalPrint("notify List Size: %d\n", notifyListSize);
 			attArr = (param_t *) malloc(sizeof(param_t));
-			currentParam = g_NotifyParamHead;
+			currentParam = getGlobalNotifyHead();
 			for (i = 0; currentParam && (i < notifyListSize); i++)
 			{
-				if (currentParam->paramSubscriptionStatus == OFF)
+				if (getParamStatus(currentParam) == OFF)
 				{
-					attArr[0].value = strdup("1");
+					snprintf(notif, sizeof(notif), "%d", 1);
+					attArr[0].value = (char *) malloc(sizeof(char) * 20);
+					walStrncpy(attArr[0].value, notif, 20);
 					attArr[0].name = strdup(currentParam->paramName);
 					attArr[0].type = WDMP_INT;
-					WalPrint("g_NotifyParam[%d]: %s\n", i,currentParam->paramName);
+					WalPrint("g_NotifyParam[%d]: %s\n", i, currentParam->paramName);
 					setAttributes(attArr, 1, NULL, &ret);
 					if (ret != WDMP_SUCCESS)
 					{
 						isError = 1;
-						currentParam->paramSubscriptionStatus = OFF;
+						updateParamStatus(currentParam, OFF);
 						WalError("Failed to turn notification ON for parameter : %s ret: %d Attempt Number: %d\n",
 								currentParam->paramName, ret, retry + 1);
 					}
 					else
 					{
-						currentParam->paramSubscriptionStatus = ON;
+						updateParamStatus(currentParam, ON);
 						WalInfo("Successfully set notification ON for parameter : %s ret: %d\n",currentParam->paramName, ret);
 					}
 					WAL_FREE(attArr[0].value);
@@ -870,7 +848,7 @@ static void setInitialNotify()
 				currentParam = currentParam->next;
 			}
 			WAL_FREE(attArr);
-			// Set to true after bootup
+			// Set the flag for accepting cloud requests
 			setBootupNotifyInitDone(true);
 			WalInfo("bootupNotifyInitDone flag is set to true. Cloud requests now allowed.\n");
 
@@ -2253,218 +2231,3 @@ int write_sync_notify_into_file(char *buff)
 
     return 0;
 }
-
-bool getBootupNotifyInitDone()
-{
-    return bootupNotifyInitDone;
-}
-
-void setBootupNotifyInitDone(bool value)
-{
-   bootupNotifyInitDone  = value;
-}
-
-void addParamToGlobalList(const char *paramName,bool paramType, bool paramSubscriptionStatus)
-{
-	if (!paramName)
-    {
-        WalError("Parameter name is NULL while adding into addParamToGlobalList\n");
-        return;
-    }
-
-	g_NotifyParam *node = (g_NotifyParam *)malloc(sizeof(g_NotifyParam));
-	if(node == NULL)
-	{
-		WalError("g_NotifyParam Memory allocation failed\n");
-		return;
-	}
-
-	memset(node, 0, sizeof(g_NotifyParam));
-	node->paramName = strdup(paramName);
-	node->paramType = paramType;
-	node->paramSubscriptionStatus = paramSubscriptionStatus;
-	node->next = NULL;
-
-	pthread_mutex_lock(&g_NotifyParamMut);
-	if (g_NotifyParamHead == NULL)
-    {
-        g_NotifyParamHead = node;
-        g_NotifyParamTail = node;
-    }
-    else
-    {
-        g_NotifyParamTail->next = node;
-        g_NotifyParamTail = node;
-    }
-
-	pthread_mutex_unlock(&g_NotifyParamMut);
-}
-
-g_NotifyParam* searchParaminGlobalList(const char *paramName)
-{
-	if (!paramName) return NULL;
-	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = g_NotifyParamHead;
-	while(temp != NULL)
-	{
-		if(strcmp(temp->paramName,paramName) == 0)
-		{
-			pthread_mutex_unlock(&g_NotifyParamMut);
-			return temp;
-		}
-		temp = temp->next;
-	}
-	pthread_mutex_unlock(&g_NotifyParamMut);
-	return NULL;
-}
-
-char* CreateJsonFromGlobalNotifyList()
-{
-	char *paramList = NULL;
-	cJSON *jsonArray = cJSON_CreateArray();
-	if (!jsonArray)
-	{
-		return NULL;
-	}
-
-	pthread_mutex_lock(&g_NotifyParamMut);
-	g_NotifyParam *temp = g_NotifyParamHead;
-    while (temp != NULL)
-	{
-        cJSON *item = cJSON_CreateObject();
-        cJSON_AddStringToObject(item, "ParamName", temp->paramName);
-        cJSON_AddStringToObject(item, "Type", temp->paramType?"Static":"Dynamic");
-        cJSON_AddStringToObject(item, "Status", temp->paramSubscriptionStatus?"ON":"OFF");
-
-        cJSON_AddItemToArray(jsonArray, item);
-        temp = temp->next;
-    }
-	pthread_mutex_unlock(&g_NotifyParamMut);
-	paramList = cJSON_PrintUnformatted(jsonArray);
-	cJSON_Delete(jsonArray);
-	return paramList;
-}
-
-int writeDynamicParamToDBFile(const char *param)
-{
-	if (!param)
-	{
-        WalError("writeDynamicParamToDBFile failed: param is NULL\n");
-        return 0;
-    }
-
-	FILE *fp = fopen(NOTIFY_PARAM_FILE , "a");
-	if (fp == NULL)
-	{
-		WalError("Failed to open file for write %s\n", NOTIFY_PARAM_FILE);
-		return 0;
-	}
-
-	fseek(fp, 0, SEEK_END);
-    long file_size = ftell(fp);
-
-	if (file_size > 0)
-	{
-		fprintf(fp, "\n%s", param);
-	}
-	else
-	{
-		fprintf(fp, "%s", param);
-	}
-	fclose(fp);
-	return 1;
-}
-
-char* readDynamicParamsFromDBFile()
-{
-	FILE *fp;
-	long file_size = 0;
-	char *paramList = NULL;
-
-	if (access(NOTIFY_PARAM_FILE, F_OK) != 0)
-	{
-		WalError("No dynamic parameters were available for this device\n");
-		return NULL;
-	}
-
-	fp = fopen(NOTIFY_PARAM_FILE , "r");
-	if (fp == NULL)
-	{
-		WalError("Failed to open '%s' for read. errno=%d (%s)\n", NOTIFY_PARAM_FILE, errno, strerror(errno));
-		return NULL;
-	}
-
-    // Move to end to determine file size
-    fseek(fp, 0, SEEK_END);
-    file_size = ftell(fp);
-    rewind(fp);  // Go back to beginning
-
-	if(file_size <= 0)
-	{
-		WalError("Dynamic parameter list is empty\n");
-        fclose(fp);
-		return NULL;
-	}
-
-    // Allocate memory to hold the entire file content
-	char *rawBuf = (char *)malloc(file_size + 1);
-    if (!rawBuf)
-    {
-        WalError("Memory allocation failed while reading DB file\n");
-        fclose(fp);
-        return NULL;
-    }
-
-    // Read entire file into paramList
-    size_t read_size = fread(rawBuf, 1, file_size, fp);
-    rawBuf[read_size] = '\0';
-    fclose(fp);
-
-	char *cleanBuf = (char *)calloc(read_size + 1, 1);
-	if (!cleanBuf)
-    {
-        WalError("Memory allocation failed for clean buffer\n");
-        free(rawBuf);
-        return NULL;
-    }
-
-	size_t cleanSize = 0;
-    char *token = strtok(rawBuf, ",");
-    while (token)
-    {
-        while (isspace((unsigned char)*token)) token++;
-        if (*token != '\0')
-        {
-            char *end = token + strlen(token) - 1;
-            while (end > token && isspace((unsigned char)*end)) end--;
-            end[1] = '\0';
-        }
-        if (*token != '\0' && strncmp(token, "Device.", 7) == 0)
-        {
-            if (cleanSize > 0)
-                cleanBuf[cleanSize++] = ',';
-
-            size_t len = strlen(token);
-            memcpy(cleanBuf + cleanSize, token, len);
-            cleanSize += len;
-            cleanBuf[cleanSize] = '\0';
-        }
-        else if (*token != '\0')
-        {
-            WalError("Skipping malformed token in DB file: '%s'\n", token);
-        }
-        token = strtok(NULL, ",");
-    }
-
-    free(rawBuf);
-    if (cleanSize == 0)
-    {
-        free(cleanBuf);
-        return NULL;
-    }
-
-	WalInfo("Successfully read %zu bytes from %s\n", cleanSize, NOTIFY_PARAM_FILE);
-	return cleanBuf;
-}
-
-

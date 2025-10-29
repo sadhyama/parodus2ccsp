@@ -8,13 +8,11 @@
 #include <rbus/rbus_value.h>
 
 #include "webpa_adapter.h"
-#include "webpa_notification.h"
+#include "webpa_eventing.h"
 #include <wdmp-c.h>
 #include <cimplog.h>
+#include <cJSON.h>
 
-#include <dslh_definitions_database.h>
-
-#define MAX_PARAM_LEN 256
 #define WEBPA_NOTIFY_PARAM "Device.DeviceInfo.Webpa.NotifySubscriptionList"
 #define WEBPA_NOTIFY_SUBSCRIPTION "Device.Webpa.Subscription.NotifyEvent()"
 
@@ -28,6 +26,6 @@ rbusError_t clearTraceContext();
 void regWebpaDataModel();
 rbusError_t NotifySubscriptionListGetHandler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t* opts);
 rbusError_t NotifySubscriptionListMethodHandler(rbusHandle_t handle, const char* methodName, rbusObject_t inParams, rbusObject_t outParams, rbusMethodAsyncHandle_t asyncHandle);
-static void setRbusResponse(rbusObject_t outParams, const char* msgStr, NOTIFY_EVENT_STATUS_CODE status, cJSON* successArr, cJSON* failureArr);
+static void setRbusResponse(rbusObject_t outParams, const char* msgStr, NOTIFY_SUBSCRIPTION_STATUS_CODE status, cJSON* successArr, cJSON* failureArr);
 static int validate_notify_params(rbusObject_t inParams, int paramCount, char *err_msg, size_t len);
 #endif

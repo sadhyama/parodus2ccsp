@@ -4,13 +4,10 @@
 #include <stdlib.h>
 #include <wdmp-c.h>
 #include <cimplog.h>
-#include <cJSON.h>
 #include "webpa_rbus.h"
 
 static rbusHandle_t rbus_handle;
 static bool isRbus = false;
-
-
 
 bool isRbusEnabled()
 {
@@ -192,7 +189,7 @@ rbusError_t NotifySubscriptionListGetHandler(rbusHandle_t handle, rbusProperty_t
 static void setRbusResponse(
     rbusObject_t outParams,
     const char* msgStr,
-    NOTIFY_EVENT_STATUS_CODE status,
+    NOTIFY_SUBSCRIPTION_STATUS_CODE status,
     cJSON* successArr,
     cJSON* failureArr)
 {
@@ -243,14 +240,14 @@ static int validate_notify_params(rbusObject_t inParams, int paramCount, char *e
         rbusValue_t paramVal = rbusObject_GetValue(inParams, keyName);
         if (!paramVal || rbusValue_GetType(paramVal) != RBUS_OBJECT)
         {
-            snprintf(err_msg, len, "Invalid or Missing Structure");
+            snprintf(err_msg, len, "Invalid method request format");
             return -1;
         }
 
         rbusObject_t subObj = rbusValue_GetObject(paramVal);
         if (!subObj)
         {
-            snprintf(err_msg, len, "Invalid or Missing SubObject structure");
+            snprintf(err_msg, len, "Invalid method request format");
             return -1;
         }
 
@@ -265,9 +262,14 @@ static int validate_notify_params(rbusObject_t inParams, int paramCount, char *e
         if (val && rbusValue_GetType(val) == RBUS_STRING)
             notifType = rbusValue_GetString(val, NULL);
 
-        if (!name || !*name || !notifType || !*notifType)
+        if (!name || !*name)
         {
-            snprintf(err_msg, len, "Parameter name or type is Empty/NULL");
+            snprintf(err_msg, len, "Parameter name is Empty/NULL");
+            return -1;
+        }
+        if(!notifType || !*notifType)
+        {
+            snprintf(err_msg, len, "Parameter type is Empty/NULL");
             return -1;
         }
     }
@@ -289,7 +291,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
     if(!getBootupNotifyInitDone())
     {
         WalInfo("Notification setup during Bootup is in Progress\n");
-        setRbusResponse(outParams, "Notification setup during Bootup is in Progress", NOTIFY_EVENT_ERR_BOOTUP_IN_PROGRESS, NULL, NULL);
+        setRbusResponse(outParams, "Notification setup during Bootup is in Progress", NOTIFY_SUBSCRIPTION_ERR_BOOTUP_IN_PROGRESS, NULL, NULL);
         return RBUS_ERROR_BUS_ERROR;
     }
 
@@ -303,15 +305,15 @@ rbusError_t NotifySubscriptionListMethodHandler(
 
     WalInfo("No. of parameters received to subscribe: %d\n", paramCount);
 
-    char err_msg[256] = {0};
+    char err_msg[512] = {0};
     int ret = validate_notify_params(inParams, paramCount, err_msg,  sizeof(err_msg));
 
     if(ret == 0)
     {
-        WalInfo("All parameters are valid\n");
+        WalInfo("Method request parameter validation success. Receieved parameters are valid\n");
         for (int i = 0; i < paramCount; i++)
         {
-            char keyName[64];
+            char keyName[512];
             snprintf(keyName, sizeof(keyName), "param%d", i);
             rbusValue_t paramVal = rbusObject_GetValue(inParams, keyName);
             rbusObject_t subObj = rbusValue_GetObject(paramVal);
@@ -325,7 +327,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
             if (notifType && strcmp(notifType, "ValueChange") == 0)
             {
                 g_NotifyParam *node = searchParaminGlobalList(name);
-                if(!node || node->paramSubscriptionStatus == OFF)
+                if(!node || getParamStatus(node) == OFF)
                 {
                     WDMP_STATUS wret = WDMP_FAILURE;
                     param_t att = {0};
@@ -338,30 +340,28 @@ rbusError_t NotifySubscriptionListMethodHandler(
 
                     if (wret == WDMP_SUCCESS)
                     {
+                        WalInfo("Succesfully subscribed to notification for parameter %s (ret: %d)\n", att.name, (int)wret);
+                        cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
+                        successCount++;
+
                         if (!node)
                         {
-                            WalInfo("Adding parameter: %s to global list\n", name);
+                            WalInfo("Adding parameter: %s to global notify list\n", name);
                             addParamToGlobalList(att.name, DYNAMIC_PARAM, ON);
                             if (writeDynamicParamToDBFile(name))
-                                WalInfo("Added parameter: %s to Dynamic Notify DB File\n", att.name);
+                                WalPrint("Added parameter: %s to Dynamic Notify DB File\n", att.name);
                             else
                                 WalError("Write to DB file failed for %s\n", name);
                         }
                         else
                         {
-                            WalInfo("parameter: %s is found. Setting status to ON\n", name);
-                            pthread_mutex_lock(&g_NotifyParamMut);
-                            node->paramSubscriptionStatus = ON;
-                            pthread_mutex_unlock(&g_NotifyParamMut);
+                            WalInfo("Parameter %s found in global notify list. Updating status to ON.\n", name);
+                            updateParamStatus(node, ON);
                         }
-
-                        WalInfo("Successfully set notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
-                        cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
-                        successCount++;
                     }
                     else
                     {
-                        WalError("Failed to turn notification ON for parameter : %s ret: %d\n", att.name, (int)wret);
+                        WalError("Failed to subscribe to notification for parameter %s (ret: %d)\n", att.name, (int)wret);
                         cJSON *failObj = cJSON_CreateObject();
                         cJSON_AddStringToObject(failObj, "parameter", name);
                         cJSON_AddStringToObject(failObj, "reason", "setAttributes failed for parameter");
@@ -371,7 +371,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
                     WAL_FREE(att.name);
                     WAL_FREE(att.value);
                 }
-                else if(node->paramSubscriptionStatus == ON)
+                else if(getParamStatus(node) == ON)
                 {
                     /* Already subscribed: treat as success for simplicity */
                     WalInfo("Parameter: %s is subscribed already\n", name);
@@ -382,10 +382,10 @@ rbusError_t NotifySubscriptionListMethodHandler(
             }
             else
             {
-                WalError("Unsupported notification type: %s\n", notifType);
+                WalError("%s Notification type is not supported\n", notifType);
                 cJSON *failObj = cJSON_CreateObject();
                 cJSON_AddStringToObject(failObj, "parameter", name);
-                cJSON_AddStringToObject(failObj, "reason", "Unsupported notification type");
+                cJSON_AddStringToObject(failObj, "reason", "Notification type is not supported");
                 cJSON_AddItemToArray(failureArr, failObj);
                 failureCount++;
                 invalidCount++;
@@ -395,10 +395,10 @@ rbusError_t NotifySubscriptionListMethodHandler(
     }
     else
     {
-        WalError("Parameter validation failed. err: %s\n", err_msg);
+        WalError("Method request parameter validation failed. err: %s\n", err_msg);
         cJSON_Delete(successArr);
         cJSON_Delete(failureArr);
-        setRbusResponse(outParams, err_msg, NOTIFY_EVENT_ERR_INVALID_INPUT, NULL, NULL);
+        setRbusResponse(outParams, err_msg, NOTIFY_SUBSCRIPTION_ERR_INVALID_INPUT, NULL, NULL);
         return RBUS_ERROR_INVALID_INPUT;
     }
 
@@ -409,30 +409,30 @@ rbusError_t NotifySubscriptionListMethodHandler(
     const int isPartial    = (!isAllSuccess && !isAllFailure);
 
     const char* msgStr;
-    NOTIFY_EVENT_STATUS_CODE notifyStatus = NOTIFY_EVENT_FAILURE; // Default to server failure
+    NOTIFY_SUBSCRIPTION_STATUS_CODE notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE; // Default to failure
 
     if (isAllSuccess)
     {
         msgStr = "Subscriptions Success";
-        notifyStatus = NOTIFY_EVENT_SUCCESS; 
+        notifyStatus = NOTIFY_SUBSCRIPTION_SUCCESS; 
     }
     else if (isAllFailure)
     {
         if (invalidCount == failureCount)
         {
             msgStr = "Unsupported notification type";
-            notifyStatus = NOTIFY_EVENT_ERR_INVALID_INPUT;
+            notifyStatus = NOTIFY_SUBSCRIPTION_ERR_INVALID_INPUT;
         }
         else
         {
             msgStr = "Subscriptions failed";
-            notifyStatus = NOTIFY_EVENT_FAILURE;
+            notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
         }
     }
     else
     {
         msgStr = "Partial success";
-        notifyStatus = NOTIFY_EVENT_MULTI_STATUS;
+        notifyStatus = NOTIFY_SUBSCRIPTION_MULTI_STATUS;
     }
 
     /* Build JSON response */
