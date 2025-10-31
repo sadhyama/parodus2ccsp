@@ -11,6 +11,8 @@
 #include "include/webpa_eventing.h"
 #include "webpa_adapter.h"
 
+#define MAX_BUFFER_LEN     512
+
 g_NotifyParam *g_NotifyParamHead = NULL;
 g_NotifyParam *g_NotifyParamTail = NULL;
 pthread_mutex_t g_NotifyParamMut = PTHREAD_MUTEX_INITIALIZER;
@@ -27,7 +29,11 @@ void setBootupNotifyInitDone(bool value)
    bootupNotifyInitDone = value;
 }
 
-void addParamToGlobalList(const char *paramName,bool paramType, bool paramSubscriptionStatus)
+/*----------------------------------------------------------------------------*/
+/*                             External Functions                             */
+/*----------------------------------------------------------------------------*/
+
+void addParamToGlobalList(const char* paramName, bool paramType, bool paramSubscriptionStatus)
 {
 	if (!paramName)
     {
@@ -120,7 +126,7 @@ int writeDynamicParamToDBFile(const char *param)
 void readDynamicParamsFromDBFile(int *notifyListSize)
 {
 	FILE *fp;
-	char param[512];
+	char param[MAX_BUFFER_LEN];
 	
 	WalInfo("Dynamic parameters reading from DB %s\n",NOTIFY_PARAM_FILE);
 
@@ -182,7 +188,7 @@ char* CreateJsonFromGlobalNotifyList()
 	return paramList;	
 }
 
-bool getParamStatus(g_NotifyParam *param) 
+bool getParamStatus(g_NotifyParam *param)
 {
     bool status;
     pthread_mutex_lock(&g_NotifyParamMut);
@@ -192,7 +198,7 @@ bool getParamStatus(g_NotifyParam *param)
 }
 
 // Function to safely update paramSubscriptionStatus
-void updateParamStatus(g_NotifyParam *param, bool status) 
+void updateParamStatus(g_NotifyParam *param, bool status)
 {
     if (param == NULL)
 	{

@@ -12,13 +12,18 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+/*----------------------------------------------------------------------------*/
+/*                                   Macros                                   */
+/*----------------------------------------------------------------------------*/
 #define NOTIFY_PARAM_FILE "/nvram/webpa_dynamic_params_db"
 
 #define DYNAMIC_PARAM 0
 #define STATIC_PARAM 1
 #define OFF 0
 #define ON 1
-
+/*----------------------------------------------------------------------------*/
+/*                               Data Structures                              */
+/*----------------------------------------------------------------------------*/
 typedef struct g_NotifyParam
 {
     char *paramName;
@@ -31,9 +36,13 @@ typedef enum {
     NOTIFY_SUBSCRIPTION_SUCCESS                    =  200,
     NOTIFY_SUBSCRIPTION_FAILURE                    =  500,
     NOTIFY_SUBSCRIPTION_MULTI_STATUS               =  207,
-    NOTIFY_SUBSCRIPTION_ERR_INVALID_INPUT          =  400,
-    NOTIFY_SUBSCRIPTION_ERR_BOOTUP_IN_PROGRESS     =  503
+    NOTIFY_SUBSCRIPTION_INVALID_INPUT          =  400,
+    NOTIFY_SUBSCRIPTION_BOOTUP_IN_PROGRESS     =  503
 } NOTIFY_SUBSCRIPTION_STATUS_CODE; 
+
+/*----------------------------------------------------------------------------*/
+/*                             Function Prototypes                            */
+/*----------------------------------------------------------------------------*/
 
 void readDynamicParamsFromDBFile(int *notifyListSize);
 int writeDynamicParamToDBFile(const char *param);
