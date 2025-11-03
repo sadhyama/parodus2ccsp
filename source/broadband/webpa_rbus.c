@@ -229,7 +229,7 @@ static void setRbusResponse(
 
 static int validate_notify_params(rbusObject_t inParams, int paramCount, char *err_msg, size_t len)
 {
-    WalInfo("------------ validate_notify_params ----------\n");
+    WalPrint("------------ validate_notify_params ----------\n");
     if (paramCount == 0)
     {
         snprintf(err_msg, len, "No parameters provided");
@@ -337,6 +337,8 @@ rbusError_t NotifySubscriptionListMethodHandler(
     int failureCount = 0, successCount = 0, invalidCount = 0;
     cJSON *successArr = cJSON_CreateArray();
     cJSON *failureArr = cJSON_CreateArray();
+    char err_msg[MAX_BUFFER_LEN] = {0};
+    char resp_str[MAX_BUFFER_LEN] = {0};
 
     // Extract inParams
     rbusProperty_t prop = rbusObject_GetProperties(inParams);
@@ -344,7 +346,6 @@ rbusError_t NotifySubscriptionListMethodHandler(
 
     WalInfo("Number of parameters received for subscription %d\n", paramCount);
 
-    char err_msg[MAX_BUFFER_LEN] = {0};
     int ret = validate_notify_params(inParams, paramCount, err_msg,  sizeof(err_msg));
 
     if(ret == 0)
@@ -363,7 +364,8 @@ rbusError_t NotifySubscriptionListMethodHandler(
             name = rbusValue_GetString(rbusObject_GetValue(subObj, "name"), NULL);
             notifType = rbusValue_GetString(rbusObject_GetValue(subObj, "notificationType"), NULL);
 
-            WalInfo("Processing parmaeter %s for subscription", name);
+            WalInfo("Processing parameter %s for subscription\n", name ? name : "");
+
             if (notifType && strcmp(notifType, "ValueChange") == 0)
             {
                 g_NotifyParam *node = searchParaminGlobalList(name);
@@ -377,7 +379,6 @@ rbusError_t NotifySubscriptionListMethodHandler(
                         WalError("malloc failed for wmsg\n");
                         return RBUS_ERROR_BUS_ERROR;
                     }
-                    char wmsg_str[MAX_BUFFER_LEN];
                     param_t att = {0};
                     att.name = strdup(name);
                     att.value = strdup("1");
@@ -389,7 +390,7 @@ rbusError_t NotifySubscriptionListMethodHandler(
 
                     if (wret == WDMP_SUCCESS)
                     {
-                        WalInfo("Succesfully subscribed notification for parameter %s\n", att.name);
+                        WalInfo("Successfully subscribed notification for parameter %s\n", att.name);
                         cJSON_AddItemToArray(successArr, cJSON_CreateString(name));
                         successCount++;
 
@@ -411,10 +412,10 @@ rbusError_t NotifySubscriptionListMethodHandler(
                     else
                     {
                         WalError("Failed to subscribe notification for parameter %s. %s\n", att.name, wmsg ? wmsg : "unknown");
-                        snprintf(wmsg_str, sizeof(wmsg_str), "Failed to subscribe notification for parameter %s. %s", att.name, wmsg ? wmsg : "unknown");
+                        snprintf(resp_str, sizeof(resp_str), "Failed to subscribe notification. %s", wmsg ? wmsg : "unknown");
                         cJSON *failObj = cJSON_CreateObject();
-                        cJSON_AddStringToObject(failObj, "parameter", name);
-                        cJSON_AddStringToObject(failObj, "reason", wmsg_str);
+                        cJSON_AddStringToObject(failObj, "name", name);
+                        cJSON_AddStringToObject(failObj, "reason", resp_str);
                         cJSON_AddItemToArray(failureArr, failObj);
                         failureCount++;
                     }
@@ -457,30 +458,37 @@ rbusError_t NotifySubscriptionListMethodHandler(
     const int isAllFailure = (successCount == 0 && total > 0);
     const int isPartial    = (!isAllSuccess && !isAllFailure);
 
-    const char* msgStr;
+    const char* msgStr = NULL;
     NOTIFY_SUBSCRIPTION_STATUS_CODE notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
 
     if (isAllSuccess)
     {
-        msgStr = "Subscriptions Success";
+        msgStr = strdup("Subscriptions Success");
         notifyStatus = NOTIFY_SUBSCRIPTION_SUCCESS;
     }
     else if (isAllFailure)
     {
         if (invalidCount == failureCount)
         {
-            msgStr = "Notification type is not supported";
+            msgStr = strdup("Notification type is not supported");
             notifyStatus = NOTIFY_SUBSCRIPTION_INVALID_INPUT;
         }
         else
         {
-            msgStr = "Subscriptions failed";
+            if (strlen(resp_str) > 0)
+            {
+                msgStr = strdup(resp_str);
+            }
+            else
+            {
+                msgStr = strdup("Subscriptions failed");
+            }
             notifyStatus = NOTIFY_SUBSCRIPTION_FAILURE;
         }
     }
     else
     {
-        msgStr = "Partial success";
+        msgStr = strdup("Partial success");
         notifyStatus = NOTIFY_SUBSCRIPTION_MULTI_STATUS;
     }
 
@@ -497,7 +505,9 @@ rbusError_t NotifySubscriptionListMethodHandler(
 
     rbusValue_t messageVal = rbusObject_GetValue(outParams, "message");
     const char* respMsgStr = messageVal ? rbusValue_GetString(messageVal, NULL) : "";
-    WalInfo("Subscription method request completed: %s (Status: %d)\n", respMsgStr, notifyStatus);
+
+    if(msgStr) WAL_FREE(msgStr);
+    WalInfo("Subscription method request completed: %s\n", respMsgStr);
     return RBUS_ERROR_SUCCESS;
 }
 
