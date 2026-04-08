@@ -9,6 +9,7 @@
 #include "webpa_notification.h"
 #include "webpa_internal.h"
 #include "webpa_rbus.h"
+#include "webpa_operate.h"
 #ifdef FEATURE_SUPPORT_WEBCONFIG
 #include <webcfg_generic.h>
 #endif
@@ -275,6 +276,57 @@ void processRequest(char *reqPayload,char *transactionId, char **resPayload, hea
                                         setRebootReason(reqObj->u.setReq->param[i], WEBPA_SET);
                                 }
                                 
+                                /* Detect OPERATE intent: single RDK.Operate param with dataType == WDMP_APPLICATION */
+                                if(reqObj->reqType == SET && paramCount == 1 &&
+                                   reqObj->u.setReq->param[0].type == WDMP_APPLICATION)
+                                {
+                                        if(reqObj->u.setReq->param[0].name == NULL ||
+                                           strcmp(reqObj->u.setReq->param[0].name, "RDK.Operate") != 0)
+                                        {
+                                                WalError("WDMP_APPLICATION param name must be 'RDK.Operate'\n");
+                                                resObj->retStatus[0] = WDMP_ERR_INVALID_PARAMETER_NAME;
+                                        }
+                                        else
+                                        {
+                                                char *responseMessage = NULL;
+                                                ret = processOperateRequest(&reqObj->u.setReq->param[0], &responseMessage);
+                                                resObj->retStatus[0] = ret;
+
+                                                resObj->u.paramRes->params = (param_t *) malloc(sizeof(param_t) * 1);
+                                                memset(resObj->u.paramRes->params, 0, sizeof(param_t));
+                                                resObj->u.paramRes->params[0].name = (char *) malloc(sizeof(char) * MAX_PARAMETERNAME_LEN);
+                                                strncpy(resObj->u.paramRes->params[0].name,
+                                                        reqObj->u.setReq->param[0].name,
+                                                        MAX_PARAMETERNAME_LEN - 1);
+                                                resObj->u.paramRes->params[0].name[MAX_PARAMETERNAME_LEN - 1] = '\0';
+                                                resObj->u.paramRes->params[0].value = responseMessage;
+                                                resObj->u.paramRes->params[0].type  = WDMP_STRING;
+                                        }
+                                }
+                                else
+                                {
+                                        /* Standard SET / SET_ATTRIBUTES path.
+                                         * Reject if any param carries WDMP_APPLICATION when there are multiple params. */
+                                        int has_operate_type = 0;
+                                        if(reqObj->reqType == SET)
+                                        {
+                                                int k;
+                                                for(k = 0; k < paramCount; k++)
+                                                {
+                                                        if(reqObj->u.setReq->param[k].type == WDMP_APPLICATION)
+                                                        {
+                                                                has_operate_type = 1;
+                                                                break;
+                                                        }
+                                                }
+                                        }
+                                        if(has_operate_type)
+                                        {
+                                                WalError("Multiple params with WDMP_APPLICATION not supported\n");
+                                                resObj->retStatus[0] = WDMP_ERR_INVALID_PARAMETER_NAME;
+                                        }
+                                        else
+                                        {
                                 ret = validate_parameter(reqObj->u.setReq->param, paramCount, reqObj->reqType);
                                 WalPrint("ret : %d\n",ret);
                                 if(ret == WDMP_SUCCESS)
@@ -313,7 +365,8 @@ void processRequest(char *reqPayload,char *transactionId, char **resPayload, hea
                                         resObj->retStatus[0] = ret;
                                         WalPrint("Response:> resObj->retStatus[0] = %d\n",resObj->retStatus[0]);
                                 }
-                                
+                                        } /* end else (no WDMP_APPLICATION in multi-param) */
+                                } /* end else (standard SET / SET_ATTRIBUTES path) */
 				WalPrint("Before getTraceContext in WEBPA SET or SET_ATTRIBUTES request\n");
 				if(res_headers != NULL) {
                                 	getTraceContext(res_headers->headers);

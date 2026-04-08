@@ -48,6 +48,11 @@ void webpaRbus_Uninit()
     rbus_close(rbus_handle);
 }
 
+rbusHandle_t getRbusHandle()
+{
+    return rbus_handle;
+}
+
 rbusError_t setTraceContext(char* traceContext[])
 {
         rbusError_t ret = RBUS_ERROR_BUS_ERROR;

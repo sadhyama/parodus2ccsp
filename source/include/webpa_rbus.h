@@ -16,6 +16,7 @@ bool isRbusEnabled();
 bool isRbusInitialized();
 WDMP_STATUS webpaRbusInit(const char *pComponentName);
 void webpaRbus_Uninit();
+rbusHandle_t getRbusHandle();
 rbusError_t setTraceContext(char* traceContext[]);
 rbusError_t getTraceContext(char* traceContext[]);
 rbusError_t clearTraceContext();

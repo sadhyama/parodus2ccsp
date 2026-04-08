@@ -125,6 +125,14 @@ add_executable(test_webpa_internal test_webpa_internal.c ../source/broadband/web
 target_link_libraries (test_webpa_internal ${WEBPA_COMMON_LIBS} -llibparodus -lwdmp-c -lrbus -ldbus-1 -lccsp_common -lcunit)
 target_link_libraries (test_webpa_internal gcov -Wl,--no-as-needed )
 
+#-------------------------------------------------------------------------------
+#   test_webpa_operate
+#-------------------------------------------------------------------------------
+add_test(NAME test_webpa_operate COMMAND ${MEMORY_CHECK} ./test_webpa_operate)
+add_executable(test_webpa_operate test_webpa_operate.c ../source/broadband/webpa_operate.c ../source/broadband/webpa_adapter.c)
+target_link_libraries (test_webpa_operate -lwdmp-c -lcjson -ltrower-base64 -lrbus ${WEBPA_COMMON_LIBS})
+target_link_libraries (test_webpa_operate gcov -Wl,--no-as-needed )
+
 # Code coverage
 
 add_custom_target(coverage
